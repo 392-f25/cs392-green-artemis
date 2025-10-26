@@ -343,12 +343,15 @@ const App = () => {
   return (
     <div className="app-shell">
       <header className="app-header">
-        {view !== 'landing' && (
+        {view !== 'landing' ? (
           <button className="back-button" onClick={() => setView('landing')}>
             Back
           </button>
+        ) : (
+          <div className="header-spacer" />
         )}
         <h1 className="app-title">Artemis Tracker</h1>
+        <div className="header-spacer" />
       </header>
       <main className="app-main">
         {renderView()}

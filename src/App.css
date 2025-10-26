@@ -30,6 +30,7 @@ button {
 .app-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
 }
 
@@ -50,6 +51,10 @@ button {
   border-radius: 9999px;
   font-size: 14px;
   cursor: pointer;
+}
+
+.header-spacer {
+  width: 60px;
 }
 
 .back-button:active {
@@ -337,6 +342,21 @@ button {
   gap: 16px;
 }
 
+.stats-chart {
+  background: rgba(30, 41, 59, 0.85);
+  border-radius: 18px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.stats-chart__title {
+  margin: 0 0 16px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #e2e8f0;
+  text-align: center;
+}
+
 .practice-card {
   background: rgba(30, 41, 59, 0.85);
   border-radius: 18px;
@@ -393,6 +413,12 @@ button {
   margin-bottom: 8px;
 }
 
+.practice-card__end-content {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
 .practice-card__end-label {
   font-size: 12px;
   text-transform: uppercase;
@@ -412,12 +438,12 @@ button {
   margin: 0;
   display: grid;
   gap: 6px;
+  flex: 1;
 }
 
 .practice-card__shot {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(80px, 1fr));
-  gap: 4px;
+  display: flex;
+  gap: 12px;
   font-size: 12px;
   color: #cbd5f5;
   background: rgba(30, 41, 59, 0.6);
@@ -432,6 +458,42 @@ button {
 
 .practice-card__shot-metric {
   font-variant-numeric: tabular-nums;
+}
+
+.mini-target {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  min-width: 80px;
+  min-height: 80px;
+  border-radius: 9999px;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(148, 163, 184, 0.05);
+}
+
+.mini-target__ring {
+  position: absolute;
+  border-radius: 9999px;
+  opacity: 0.9;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  border: 1px solid rgba(15, 23, 42, 0.2);
+}
+
+.mini-target__dot {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 9999px;
+  transform: translate(-50%, -50%);
+  background: #000000;
+  border: 1px solid rgba(0, 0, 0, 0.8);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
 }
 
 @media (min-width: 600px) {
