@@ -1,44 +1,12 @@
 import type { MouseEvent } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-
-type View = 'landing' | 'new-workout' | 'stats' | 'feed'
-
-type Shot = {
-  x: number
-  y: number
-  score: number
-}
-
-type End = {
-  shots: Shot[]
-  endScore: number
-}
-
-type Round = {
-  id: string
-  createdAt: string
-  ends: End[]
-  totalScore: number
-}
-
-type StoredRound = {
-  id: string
-  createdAt: string
-  totalScore: number
-  round: Record<string, Record<string, number>>
-}
-
-const RING_COUNT = 10
-const SHOTS_PER_END = 3
-const DEFAULT_ENDS_PER_ROUND = 6
-const MIN_ENDS = 1
-const MAX_ENDS = 12
-
-const generateEndTemplate = (): End => ({
-  shots: [],
-  endScore: 0,
-})
+import type { View, Shot, End, Round, StoredRound } from './utils/types'
+import { RING_COUNT, SHOTS_PER_END, DEFAULT_ENDS_PER_ROUND, MIN_ENDS, MAX_ENDS } from './utils/constants'
+import { generateEndTemplate, calculateScore, generateRingColors } from './utils/helpers'
+import { Target } from './components/Target'
+import { EndSummary } from './components/EndSummary'
+import { EndsPerRoundSelector } from './components/EndsPerRoundSelector'
 
 const App = () => {
   const [view, setView] = useState<View>('landing')
@@ -115,13 +83,7 @@ const App = () => {
     localStorage.setItem('archery-rounds', JSON.stringify(payload))
   }, [rounds])
 
-  const ringColors = useMemo(() => {
-    const colors: string[] = []
-    for (let ringIndex = 0; ringIndex < RING_COUNT; ringIndex += 1) {
-      colors.push(ringIndex % 2 === 0 ? '#f87171' : '#ffffff')
-    }
-    return colors
-  }, [])
+  const ringColors = useMemo(() => generateRingColors(RING_COUNT), [])
 
   const resetRoundState = () => {
     setCurrentEndIndex(0)
@@ -134,14 +96,6 @@ const App = () => {
       resetRoundState()
     }
   }, [view, endsPerRound])
-
-  const calculateScore = (x: number, y: number) => {
-    const distance = Math.sqrt(x * x + y * y)
-    const normalized = Math.min(distance, 1)
-    const ring = Math.floor(normalized * RING_COUNT)
-    const score = Math.max(0, 10 - ring)
-    return score
-  }
 
   const updateEndWithShot = (shot: Shot) => {
     setCurrentRound(prev => {
@@ -254,66 +208,21 @@ const App = () => {
 
   const newWorkoutView = (
     <div className="flex flex-col gap-6 w-full max-w-sm mx-auto">
-      <div>
-        <label className="block text-sm font-medium text-slate-200">Ends per round</label>
-        <div className="flex gap-2 mt-2 items-center">
-          {[3, 6, 9].map(value => (
-            <button
-              key={value}
-              className={`chip ${value === endsPerRound ? 'chip--active' : ''}`}
-              onClick={() => handleEndsPerRoundChange(value)}
-            >
-              {value}
-            </button>
-          ))}
-          <input
-            className="number-input"
-            type="number"
-            min={MIN_ENDS}
-            max={MAX_ENDS}
-            value={endsPerRound}
-            onChange={event => handleEndsPerRoundChange(Number(event.target.value) || MIN_ENDS)}
-          />
-        </div>
-        <p className="text-xs text-slate-400 mt-1">Choose between {MIN_ENDS} and {MAX_ENDS} ends per round.</p>
-      </div>
+      <EndsPerRoundSelector
+        endsPerRound={endsPerRound}
+        minEnds={MIN_ENDS}
+        maxEnds={MAX_ENDS}
+        onChange={handleEndsPerRoundChange}
+      />
 
-      <div className="relative mx-auto">
-        <div className="target" onClick={handleTargetClick} role="presentation">
-          {ringColors.map((color, index) => (
-            <div
-              key={index}
-              className="target-ring"
-              style={{
-                backgroundColor: color,
-                width: `${100 - (index / RING_COUNT) * 100}%`,
-                height: `${100 - (index / RING_COUNT) * 100}%`,
-              }}
-            />
-          ))}
-        {currentRound.flatMap((end, endIndex) =>
-          end.shots.map((shot, shotIndex) => (
-            <div
-              key={`${endIndex}-${shotIndex}`}
-              className={`shot-dot ${endIndex === currentEndIndex ? 'shot-dot--current' : 'shot-dot--previous'}`}
-              style={{
-                left: `${(shot.x + 1) * 50}%`,
-                top: `${(shot.y + 1) * 50}%`,
-              }}
-            />
-          )),
-        )}
-          {activeShot && (
-            <div
-              className="shot-dot shot-dot--preview"
-              style={{
-                left: `${(activeShot.x + 1) * 50}%`,
-                top: `${(activeShot.y + 1) * 50}%`,
-              }}
-            />
-          )}
-        </div>
-      </div>
+      <Target
+        ringColors={ringColors}
+        currentRound={currentRound}
+        currentEndIndex={currentEndIndex}
+        activeShot={activeShot}
+        onTargetClick={handleTargetClick}
+        ringCount={RING_COUNT}
+      />
 
       <div className="text-center text-slate-200">
         <p className="text-lg font-semibold">End {currentEndIndex + 1} of {endsPerRound}</p>
@@ -326,25 +235,11 @@ const App = () => {
         <p className="text-sm text-slate-300">End score: {currentEnd?.endScore ?? 0}</p>
       </div>
 
-      <div className="end-summary">
-        {currentRound.map((end, index) => (
-          <div
-            key={index}
-            className={`end-summary__item ${index === currentEndIndex ? 'end-summary__item--active' : ''}`}
-            onClick={() => setCurrentEndIndex(index)}
-            role="button"
-            tabIndex={0}
-            onKeyDown={event => {
-              if (event.key === 'Enter' || event.key === ' ') {
-                setCurrentEndIndex(index)
-              }
-            }}
-          >
-            <span className="end-summary__label">End {index + 1}</span>
-            <span className="end-summary__score">{end.endScore}</span>
-          </div>
-        ))}
-      </div>
+      <EndSummary
+        currentRound={currentRound}
+        currentEndIndex={currentEndIndex}
+        onEndClick={setCurrentEndIndex}
+      />
 
       <div className="flex flex-col gap-2">
         <button
