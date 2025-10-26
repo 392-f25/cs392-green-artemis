@@ -1,12 +1,13 @@
 import type { MouseEvent } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-import type { View, Shot, End, Round, StoredRound } from './utils/types'
+import type { View, Shot, End, Round, StoredRound, StoredShot } from './utils/types'
 import { RING_COUNT, SHOTS_PER_END, DEFAULT_ENDS_PER_ROUND, MIN_ENDS, MAX_ENDS } from './utils/constants'
 import { generateEndTemplate, calculateScore, generateRingColors } from './utils/helpers'
 import { Target } from './components/Target'
 import { EndSummary } from './components/EndSummary'
 import { EndsPerRoundSelector } from './components/EndsPerRoundSelector'
+import { StatsView } from './components/StatsView'
 
 const App = () => {
   const [view, setView] = useState<View>('landing')
@@ -20,56 +21,107 @@ const App = () => {
 
   useEffect(() => {
     const stored = localStorage.getItem('archery-rounds')
-    if (stored) {
-      try {
-        const parsed: unknown = JSON.parse(stored)
-        if (Array.isArray(parsed)) {
-          if (parsed.every(item => typeof item === 'object' && item !== null && 'round' in item)) {
-            const hydrated: Round[] = (parsed as StoredRound[]).map(storedRound => {
-              const ends = Object.keys(storedRound.round ?? {})
-                .sort()
-                .map(endKey => {
-                  const scoreMap = storedRound.round[endKey] ?? {}
-                  const scoreEntries = Object.keys(scoreMap)
-                    .sort()
-                    .map(scoreKey => scoreMap[scoreKey])
-                    .filter(score => typeof score === 'number')
-                    .slice(0, SHOTS_PER_END)
-                  const shots: Shot[] = scoreEntries.map(score => ({ x: 0, y: 0, score }))
-                  const endScore = shots.reduce((total, shot) => total + shot.score, 0)
-                  return { shots, endScore }
+    if (!stored) {
+      return
+    }
+
+    try {
+      const parsed: unknown = JSON.parse(stored)
+      if (!Array.isArray(parsed)) {
+        return
+      }
+
+      const hydrated = parsed
+        .map(item => {
+          if (typeof item !== 'object' || item === null) {
+            return null
+          }
+
+          if ('round' in item && typeof item.round === 'object' && item.round !== null) {
+            const storedRound = item as StoredRound
+            const ends = Object.keys(storedRound.round ?? {})
+              .sort()
+              .map(endKey => {
+                const storedShots = storedRound.round?.[endKey] ?? {}
+                const orderedShots = Object.keys(storedShots)
+                  .sort()
+                  .map(shotKey => storedShots[shotKey])
+                  .filter(
+                    (entry): entry is StoredShot | number =>
+                      typeof entry === 'number' || (typeof entry === 'object' && entry !== null && 'score' in entry),
+                  )
+                  .slice(0, SHOTS_PER_END)
+
+                const shots: Shot[] = orderedShots.map(entry => {
+                  if (typeof entry === 'number') {
+                    return { x: 0, y: 0, score: entry }
+                  }
+                  const shotScore = typeof entry.score === 'number' ? entry.score : 0
+                  const shotX = typeof entry.x === 'number' ? entry.x : 0
+                  const shotY = typeof entry.y === 'number' ? entry.y : 0
+                  return { x: shotX, y: shotY, score: shotScore }
                 })
 
-              const totalScore = storedRound.totalScore ?? ends.reduce((total, end) => total + end.endScore, 0)
+                const endScore = shots.reduce((total, shot) => total + shot.score, 0)
+                return { shots, endScore }
+              })
 
-              return {
-                id: storedRound.id ?? crypto.randomUUID(),
-                createdAt: storedRound.createdAt ?? new Date().toISOString(),
-                ends,
-                totalScore,
-              }
-            })
-            setRounds(hydrated)
-          } else {
-            setRounds(parsed as Round[])
+            const totalScore = storedRound.totalScore ?? ends.reduce((total, end) => total + end.endScore, 0)
+
+            return {
+              id: storedRound.id ?? crypto.randomUUID(),
+              createdAt: storedRound.createdAt ?? new Date().toISOString(),
+              ends,
+              totalScore,
+            }
           }
-        }
-      } catch (err) {
-        console.error('Failed to parse rounds', err)
+
+          if ('ends' in item) {
+            const roundCandidate = item as Partial<Round>
+            const ends = (roundCandidate.ends ?? []).map(end => {
+              const shots = (end?.shots ?? []).map(shot => ({
+                x: typeof shot?.x === 'number' ? shot.x : 0,
+                y: typeof shot?.y === 'number' ? shot.y : 0,
+                score: typeof shot?.score === 'number' ? shot.score : 0,
+              })).slice(0, SHOTS_PER_END)
+              const endScore = end?.endScore ?? shots.reduce((total, shot) => total + shot.score, 0)
+              return { shots, endScore }
+            })
+            const totalScore = roundCandidate.totalScore ?? ends.reduce((total, end) => total + end.endScore, 0)
+            return {
+              id: roundCandidate.id ?? crypto.randomUUID(),
+              createdAt: roundCandidate.createdAt ?? new Date().toISOString(),
+              ends,
+              totalScore,
+            }
+          }
+
+          return null
+        })
+        .filter((round): round is Round => round !== null)
+
+      if (hydrated.length > 0) {
+        setRounds(hydrated)
       }
+    } catch (err) {
+      console.error('Failed to parse rounds', err)
     }
   }, [])
 
   useEffect(() => {
     const payload: StoredRound[] = rounds.map(round => {
-      const roundData = round.ends.reduce<Record<string, Record<string, number>>>((acc, end, endIndex) => {
+      const roundData = round.ends.reduce<Record<string, Record<string, StoredShot>>>((acc, end, endIndex) => {
         const endKey = `end${String(endIndex + 1).padStart(2, '0')}`
-        const scoreEntries: Record<string, number> = {}
+        const shotEntries: Record<string, StoredShot> = {}
         end.shots.forEach((shot, shotIndex) => {
-          const scoreKey = `score${shotIndex + 1}`
-          scoreEntries[scoreKey] = shot.score
+          const shotKey = `shot${shotIndex + 1}`
+          shotEntries[shotKey] = {
+            x: shot.x,
+            y: shot.y,
+            score: shot.score,
+          }
         })
-        acc[endKey] = scoreEntries
+        acc[endKey] = shotEntries
         return acc
       }, {})
 
@@ -92,7 +144,7 @@ const App = () => {
   }
 
   useEffect(() => {
-    if (view === 'new-workout') {
+    if (view === 'new-practice') {
       resetRoundState()
     }
   }, [view, endsPerRound])
@@ -189,8 +241,8 @@ const App = () => {
 
   const landingView = (
     <div className="flex flex-col gap-4 w-full max-w-sm mx-auto">
-      <button className="primary-button" onClick={() => setView('new-workout')}>
-        Add New Workout
+      <button className="primary-button" onClick={() => setView('new-practice')}>
+        Add New Practice
       </button>
       <button className="secondary-button" onClick={() => setView('stats')}>
         View Stats
@@ -206,7 +258,7 @@ const App = () => {
     setEndsPerRound(clamped)
   }
 
-  const newWorkoutView = (
+  const newPracticeView = (
     <div className="flex flex-col gap-6 w-full max-w-sm mx-auto">
       <EndsPerRoundSelector
         endsPerRound={endsPerRound}
@@ -277,10 +329,10 @@ const App = () => {
     switch (view) {
       case 'landing':
         return landingView
-      case 'new-workout':
-        return newWorkoutView
+      case 'new-practice':
+        return newPracticeView
       case 'stats':
-        return <div className="text-center text-slate-200">Stats coming soon.</div>
+        return <StatsView rounds={rounds} />
       case 'feed':
         return <div className="text-center text-slate-200">Feed coming soon.</div>
       default:
@@ -301,7 +353,7 @@ const App = () => {
       <main className="app-main">
         {renderView()}
       </main>
-      {view === 'new-workout' && (
+      {view === 'new-practice' && (
         <footer className="app-footer text-slate-300 text-xs text-center">
           Tap target to place shot. Confirm to lock it in.
         </footer>
