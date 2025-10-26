@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import type { View, Shot, End, Round, StoredRound, StoredShot } from './utils/types'
 import { RING_COUNT, SHOTS_PER_END, DEFAULT_ENDS_PER_ROUND, MIN_ENDS, MAX_ENDS } from './utils/constants'
-import { generateEndTemplate, calculateScore, generateRingColors } from './utils/helpers'
+import { generateEndTemplate, calculateScore, generateRingColors, calculateEndPrecision } from './utils/helpers'
 import { Target } from './components/Target'
 import { EndSummary } from './components/EndSummary'
 import { EndsPerRoundSelector } from './components/EndsPerRoundSelector'
@@ -63,7 +63,8 @@ const App = () => {
                 })
 
                 const endScore = shots.reduce((total, shot) => total + shot.score, 0)
-                return { shots, endScore }
+                const precision = calculateEndPrecision(shots)
+                return { shots, endScore, precision }
               })
 
             const totalScore = storedRound.totalScore ?? ends.reduce((total, end) => total + end.endScore, 0)
@@ -85,7 +86,8 @@ const App = () => {
                 score: typeof shot?.score === 'number' ? shot.score : 0,
               })).slice(0, SHOTS_PER_END)
               const endScore = end?.endScore ?? shots.reduce((total, shot) => total + shot.score, 0)
-              return { shots, endScore }
+              const precision = calculateEndPrecision(shots)
+              return { shots, endScore, precision }
             })
             const totalScore = roundCandidate.totalScore ?? ends.reduce((total, end) => total + end.endScore, 0)
             return {
@@ -157,7 +159,8 @@ const App = () => {
 
       const shots = [...end.shots, shot].slice(0, SHOTS_PER_END)
       const endScore = shots.reduce((total, s) => total + s.score, 0)
-      updated[currentEndIndex] = { shots, endScore }
+      const precision = calculateEndPrecision(shots)
+      updated[currentEndIndex] = { shots, endScore, precision }
       return updated
     })
   }
@@ -218,6 +221,7 @@ const App = () => {
     const normalizedEnds = currentRound.map(end => ({
       shots: end.shots.slice(0, SHOTS_PER_END),
       endScore: end.shots.slice(0, SHOTS_PER_END).reduce((total, shot) => total + shot.score, 0),
+      precision: calculateEndPrecision(end.shots.slice(0, SHOTS_PER_END)),
     }))
     const totalScore = normalizedEnds.reduce((total, end) => total + end.endScore, 0)
     const round: Round = {

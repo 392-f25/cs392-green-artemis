@@ -9,6 +9,7 @@ export type Shot = {
 export type End = {
   shots: Shot[]
   endScore: number
+  precision: number
 }
 
 export type Round = {
@@ -35,5 +36,6 @@ export type AggregateStats = {
   averagePoints: number
   averageDistanceFromCenter: number
   averageDistanceBetweenShots: number
+  averagePrecision: number
   shotCount: number
 }

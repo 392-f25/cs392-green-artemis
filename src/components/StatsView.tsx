@@ -42,10 +42,17 @@ const computeAggregateStats = (rounds: Round[]): AggregateStats => {
 
   const averageDistanceBetweenShots = calculateAverage(distancesBetweenShots)
 
+  // Calculate average precision (average of each end's precision)
+  const endPrecisions = rounds.flatMap(round => 
+    round.ends.map(end => end.precision).filter(p => p > 0)
+  )
+  const averagePrecision = calculateAverage(endPrecisions)
+
   return {
     averagePoints,
     averageDistanceFromCenter,
     averageDistanceBetweenShots,
+    averagePrecision,
     shotCount: shots.length,
   }
 }
@@ -55,12 +62,15 @@ const prepareChartData = (rounds: Round[]) => {
     const shots = round.ends.flatMap(end => end.shots)
     const avgScore = calculateAverage(shots.map(shot => shot.score))
     const avgDistance = calculateAverage(shots.map(shot => calculateDistanceFromCenter(shot)))
+    const precisions = round.ends.map(end => end.precision).filter(p => p > 0)
+    const avgPrecision = calculateAverage(precisions)
     
     return {
       practice: `#${rounds.length - index}`,
       practiceNumber: rounds.length - index,
       avgScore: Number(avgScore.toFixed(2)),
       avgDistance: Number(avgDistance.toFixed(2)),
+      avgPrecision: Number(avgPrecision.toFixed(2)),
       totalScore: round.totalScore,
       date: formatDate(round.createdAt),
     }
@@ -101,14 +111,127 @@ const MiniTarget = ({ shots }: MiniTargetProps) => {
   )
 }
 
+interface AggregateTargetProps {
+  rounds: Round[]
+}
+
+const PRACTICE_COLORS = [
+  '#3b82f6', // blue
+  '#10b981', // green
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#8b5cf6', // purple
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#14b8a6', // teal
+  '#a855f7', // violet
+]
+
+const AggregateTarget = ({ rounds }: AggregateTargetProps) => {
+  const ringColors = useMemo(() => generateRingColors(RING_COUNT), [])
+  const [highlightedRoundId, setHighlightedRoundId] = useState<string | null>(null)
+  
+  const handlePracticeClick = (roundId: string) => {
+    setHighlightedRoundId(prev => prev === roundId ? null : roundId)
+  }
+  
+  return (
+    <div className="aggregate-target-container">
+      <h3 className="aggregate-target__title">All Shots Overlay</h3>
+      <p className="aggregate-target__subtitle">Click a practice to highlight its shots</p>
+      <div className="aggregate-target">
+        {ringColors.map((color, index) => (
+          <div
+            key={index}
+            className="aggregate-target__ring"
+            style={{
+              backgroundColor: color,
+              width: `${100 - (index / RING_COUNT) * 100}%`,
+              height: `${100 - (index / RING_COUNT) * 100}%`,
+            }}
+          />
+        ))}
+        {rounds.map((round, roundIndex) => {
+          const shots = round.ends.flatMap(end => end.shots)
+          const practiceColor = PRACTICE_COLORS[roundIndex % PRACTICE_COLORS.length]
+          const isHighlighted = highlightedRoundId === round.id
+          const isDimmed = highlightedRoundId !== null && highlightedRoundId !== round.id
+          
+          return shots.map((shot, shotIndex) => (
+            <div
+              key={`${round.id}-${shotIndex}`}
+              className={`aggregate-target__dot ${isHighlighted ? 'aggregate-target__dot--highlighted' : ''} ${isDimmed ? 'aggregate-target__dot--dimmed' : ''}`}
+              style={{
+                left: `${(shot.x + 1) * 50}%`,
+                top: `${(shot.y + 1) * 50}%`,
+                backgroundColor: practiceColor,
+                borderColor: practiceColor,
+              }}
+              onClick={() => handlePracticeClick(round.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  handlePracticeClick(round.id)
+                }
+              }}
+            />
+          ))
+        })}
+      </div>
+      <div className="aggregate-target__legend">
+        {rounds.map((round, roundIndex) => {
+          const isHighlighted = highlightedRoundId === round.id
+          const isDimmed = highlightedRoundId !== null && highlightedRoundId !== round.id
+          
+          return (
+            <div 
+              key={round.id} 
+              className={`aggregate-target__legend-item ${isHighlighted ? 'aggregate-target__legend-item--highlighted' : ''} ${isDimmed ? 'aggregate-target__legend-item--dimmed' : ''}`}
+              onClick={() => handlePracticeClick(round.id)}
+              role="button"
+              tabIndex={0}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault()
+                  handlePracticeClick(round.id)
+                }
+              }}
+            >
+              <div 
+                className="aggregate-target__legend-color"
+                style={{ backgroundColor: PRACTICE_COLORS[roundIndex % PRACTICE_COLORS.length] }}
+              />
+              <span className="aggregate-target__legend-label">
+                Practice #{rounds.length - roundIndex}
+              </span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 export const StatsView = ({ rounds }: StatsViewProps) => {
   const [activeTab, setActiveTab] = useState<StatsTab>('history')
   const [range, setRange] = useState(5)
+  const [expandedEnds, setExpandedEnds] = useState<Record<string, boolean>>({})
 
   const sortedRounds = useMemo(
     () => [...rounds].sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()),
     [rounds],
   )
+
+  const toggleEndExpansion = (roundId: string, endIndex: number) => {
+    const key = `${roundId}-${endIndex}`
+    setExpandedEnds(prev => ({
+      ...prev,
+      [key]: !prev[key],
+    }))
+  }
 
   const effectiveRange = Math.max(1, Math.min(range, sortedRounds.length || 1))
 
@@ -177,6 +300,8 @@ export const StatsView = ({ rounds }: StatsViewProps) => {
             <span className="stats-aggregate__hint">Analyzing last {effectiveRange} practice{effectiveRange === 1 ? '' : 's'}.</span>
           </div>
 
+          <AggregateTarget rounds={selectedRounds} />
+
           <div className="stats-grid">
             <div className="stats-card">
               <span className="stats-card__label">Practices Analyzed</span>
@@ -199,6 +324,11 @@ export const StatsView = ({ rounds }: StatsViewProps) => {
               <span className="stats-card__label">Avg Distance Between Shots</span>
               <span className="stats-card__value">{formatUnits(aggregateStats.averageDistanceBetweenShots)}</span>
               <span className="stats-card__sublabel">units</span>
+            </div>
+            <div className="stats-card">
+              <span className="stats-card__label">Average Precision</span>
+              <span className="stats-card__value">{formatUnits(aggregateStats.averagePrecision)}</span>
+              <span className="stats-card__sublabel">units per end</span>
             </div>
           </div>
         </div>
@@ -248,46 +378,109 @@ export const StatsView = ({ rounds }: StatsViewProps) => {
                   dot={{ fill: '#10b981', r: 4 }}
                   activeDot={{ r: 6 }}
                 />
+                <Line 
+                  type="monotone" 
+                  dataKey="avgPrecision" 
+                  stroke="#a78bfa" 
+                  strokeWidth={2}
+                  name="Average Precision"
+                  dot={{ fill: '#a78bfa', r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
               </LineChart>
             </ResponsiveContainer>
           </div>
 
-          {selectedRounds.map((round, roundIndex) => (
-            <div key={round.id} className="practice-card">
-              <div className="practice-card__header">
-                <div>
-                  <p className="practice-card__title">Practice #{sortedRounds.length - roundIndex}</p>
-                  <p className="practice-card__timestamp">{formatDate(round.createdAt)}</p>
-                </div>
-                <div className="practice-card__score">Total Score: {round.totalScore}</div>
-              </div>
-              <div className="practice-card__body">
-                {round.ends.map((end, endIndex) => (
-                  <div key={`${round.id}-end-${endIndex}`} className="practice-card__end">
-                    <div className="practice-card__end-header">
-                      <span className="practice-card__end-label">End {endIndex + 1}</span>
-                      <span className="practice-card__end-score">{end.endScore} pts</span>
-                    </div>
-                    <div className="practice-card__end-content">
-                      <ul className="practice-card__shots">
-                        {end.shots.map((shot, shotIndex) => {
-                          const distanceFromCenter = calculateDistanceFromCenter(shot)
-                          return (
-                            <li key={`${round.id}-end-${endIndex}-shot-${shotIndex}`} className="practice-card__shot">
-                              <span className="practice-card__shot-label">Shot {shotIndex + 1}</span>
-                              <span className="practice-card__shot-metric">{shot.score} pts</span>
-                              <span className="practice-card__shot-metric">dist: {formatUnits(distanceFromCenter)}</span>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                      <MiniTarget shots={end.shots} />
-                    </div>
+          {selectedRounds.map((round, roundIndex) => {
+            const roundPrecisions = round.ends.map(end => end.precision).filter(p => p > 0)
+            const avgRoundPrecision = calculateAverage(roundPrecisions)
+            
+            return (
+              <div key={round.id} className="practice-card">
+                <div className="practice-card__header">
+                  <div>
+                    <p className="practice-card__title">Practice #{sortedRounds.length - roundIndex}</p>
+                    <p className="practice-card__timestamp">{formatDate(round.createdAt)}</p>
+                    {avgRoundPrecision > 0 && (
+                      <p className="practice-card__precision">
+                        Avg Precision: {formatUnits(avgRoundPrecision)} units
+                      </p>
+                    )}
                   </div>
-                ))}
+                  <div className="practice-card__score">Total Score: {round.totalScore}</div>
+                </div>
+                <div className="practice-card__body">
+                  {round.ends.map((end, endIndex) => {
+                    const endKey = `${round.id}-${endIndex}`
+                    const isExpanded = expandedEnds[endKey] || false
+                    return (
+                    <div key={`${round.id}-end-${endIndex}`} className="practice-card__end">
+                      <div 
+                        className="practice-card__end-header practice-card__end-header--clickable"
+                        onClick={() => toggleEndExpansion(round.id, endIndex)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            toggleEndExpansion(round.id, endIndex)
+                          }
+                        }}
+                      >
+                        <div className="practice-card__end-header-left">
+                          <span className="practice-card__end-label">End {endIndex + 1}</span>
+                          <span className="practice-card__end-score">{end.endScore} pts</span>
+                        </div>
+                        <svg 
+                          className={`practice-card__dropdown-icon ${isExpanded ? 'practice-card__dropdown-icon--expanded' : ''}`}
+                          width="20" 
+                          height="20" 
+                          viewBox="0 0 20 20" 
+                          fill="none"
+                          xmlns="http://www.w3.org/2000/svg"
+                        >
+                          <path 
+                            d="M5 7.5L10 12.5L15 7.5" 
+                            stroke="currentColor" 
+                            strokeWidth="2" 
+                            strokeLinecap="round" 
+                            strokeLinejoin="round"
+                          />
+                        </svg>
+                      </div>
+                      <div className="practice-card__end-target">
+                        <MiniTarget shots={end.shots} />
+                      </div>
+                      {isExpanded && (
+                        <div className="practice-card__end-details">
+                          <div className="practice-card__end-precision">
+                            <span className="practice-card__precision-label">End Precision:</span>
+                            <span className="practice-card__precision-value">
+                              {end.precision > 0 ? formatUnits(end.precision) : 'N/A'}
+                            </span>
+                            <span className="practice-card__precision-sublabel">avg units between shots</span>
+                          </div>
+                          <ul className="practice-card__shots">
+                            {end.shots.map((shot, shotIndex) => {
+                              const distanceFromCenter = calculateDistanceFromCenter(shot)
+                              return (
+                                <li key={`${round.id}-end-${endIndex}-shot-${shotIndex}`} className="practice-card__shot">
+                                  <span className="practice-card__shot-label">Shot {shotIndex + 1}</span>
+                                  <span className="practice-card__shot-metric">{shot.score} pts</span>
+                                  <span className="practice-card__shot-metric">dist: {formatUnits(distanceFromCenter)}</span>
+                                </li>
+                              )
+                            })}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
-          ))}
+          )
+          })}
         </div>
       )}
     </div>

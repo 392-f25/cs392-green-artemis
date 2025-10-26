@@ -4,6 +4,7 @@ import { RING_COUNT, TARGET_RADIUS_UNITS } from './constants'
 export const generateEndTemplate = (): End => ({
   shots: [],
   endScore: 0,
+  precision: 0,
 })
 
 export const calculateScore = (x: number, y: number): number => {
@@ -40,4 +41,17 @@ export const calculateAverage = (values: number[]): number => {
   }
   const total = values.reduce((sum, value) => sum + value, 0)
   return total / values.length
+}
+
+export const calculateEndPrecision = (shots: Shot[], targetRadius = TARGET_RADIUS_UNITS): number => {
+  if (shots.length <= 1) {
+    return 0
+  }
+  
+  const distances: number[] = []
+  for (let i = 1; i < shots.length; i += 1) {
+    distances.push(calculateDistanceBetweenShots(shots[i - 1], shots[i], targetRadius))
+  }
+  
+  return calculateAverage(distances)
 }
