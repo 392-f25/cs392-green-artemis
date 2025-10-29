@@ -8,6 +8,8 @@ import { Target } from './components/Target'
 import { EndSummary } from './components/EndSummary'
 import { EndsPerRoundSelector } from './components/EndsPerRoundSelector'
 import { StatsView } from './components/StatsView'
+import { auth, googleProvider } from './firebase'
+import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
 
 const App = () => {
   const [view, setView] = useState<View>('landing')
@@ -19,6 +21,30 @@ const App = () => {
   )
   const [activeShot, setActiveShot] = useState<Shot | null>(null)
   const [rounds, setRounds] = useState<Round[]>([])
+  const [user, setUser] = useState<User | null>(null)
+
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, current => {
+      setUser(current)
+    })
+    return () => unsubscribe()
+  }, [])
+
+  const handleSignIn = async () => {
+    try {
+      await signInWithPopup(auth, googleProvider)
+    } catch (err) {
+      console.error('Sign-in failed', err)
+    }
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth)
+    } catch (err) {
+      console.error('Sign-out failed', err)
+    }
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem('archery-rounds')
@@ -608,6 +634,12 @@ const App = () => {
     }
   }
 
+  const signInView = (
+    <div className="flex items-center justify-center w-full h-full">
+      <button className="primary-button" onClick={handleSignIn}>Sign in with Google</button>
+    </div>
+  )
+
   return (
     <div className="app-shell">
       <header className="app-header">
@@ -618,13 +650,27 @@ const App = () => {
         ) : (
           <div className="header-spacer" />
         )}
-        <h1 className="app-title">Artemis</h1>
-        <div className="header-spacer" />
+        <h1 className="app-title">Artemis Tracker</h1>
+        {user ? (
+          <div className="flex items-center gap-2">
+            {user.photoURL ? (
+              <img
+                src={user.photoURL}
+                alt={user.displayName ?? 'User'}
+                className="h-8 w-8 rounded-full"
+                referrerPolicy="no-referrer"
+              />
+            ) : null}
+            <button className="secondary-button" onClick={handleSignOut}>Sign out</button>
+          </div>
+        ) : (
+          <div className="header-spacer" />
+        )}
       </header>
       <main className="app-main">
-        {renderView()}
+        {user ? renderView() : signInView}
       </main>
-      {view === 'new-practice' && (
+      {user && view === 'new-practice' && (
         <footer className="app-footer text-slate-300 text-xs text-center">
           Tap target to place shot. Confirm to lock it in.
         </footer>
