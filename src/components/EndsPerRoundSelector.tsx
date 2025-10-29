@@ -1,15 +1,17 @@
 interface EndsPerRoundSelectorProps {
-  endsPerRound: number
+  value: string
   minEnds: number
   maxEnds: number
-  onChange: (value: number) => void
+  onChange: (value: string) => void
+  onBlur: () => void
 }
 
 export const EndsPerRoundSelector = ({
-  endsPerRound,
+  value,
   minEnds,
   maxEnds,
   onChange,
+  onBlur,
 }: EndsPerRoundSelectorProps) => {
   return (
     <div>
@@ -20,8 +22,9 @@ export const EndsPerRoundSelector = ({
           type="number"
           min={minEnds}
           max={maxEnds}
-          value={endsPerRound}
-          onChange={event => onChange(Number(event.target.value) || minEnds)}
+          value={value}
+          onChange={event => onChange(event.target.value)}
+          onBlur={onBlur}
           aria-label="Number of ends per round"
         />
       </div>

@@ -16,11 +16,16 @@ export const calculateScore = (x: number, y: number): number => {
 }
 
 export const generateRingColors = (ringCount: number): string[] => {
+  const bandColors = ['#e6d100', '#e4442c', '#23a0d6', '#484239', '#d3c5b3']
   const colors: string[] = []
+
   for (let ringIndex = 0; ringIndex < ringCount; ringIndex += 1) {
-    colors.push(ringIndex % 2 === 0 ? '#f87171' : '#ffffff')
+    const bandIndex = Math.floor(ringIndex / 2)
+    const color = bandColors[Math.min(bandIndex, bandColors.length - 1)]
+    colors.push(color)
   }
-  return colors
+
+  return colors.reverse()
 }
 
 export const calculateDistanceFromCenter = (shot: Shot, targetRadius = TARGET_RADIUS_UNITS): number => {
@@ -47,11 +52,11 @@ export const calculateEndPrecision = (shots: Shot[], targetRadius = TARGET_RADIU
   if (shots.length <= 1) {
     return 0
   }
-  
+
   const distances: number[] = []
   for (let i = 1; i < shots.length; i += 1) {
     distances.push(calculateDistanceBetweenShots(shots[i - 1], shots[i], targetRadius))
   }
-  
+
   return calculateAverage(distances)
 }

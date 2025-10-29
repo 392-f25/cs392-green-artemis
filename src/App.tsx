@@ -12,6 +12,7 @@ import { StatsView } from './components/StatsView'
 const App = () => {
   const [view, setView] = useState<View>('landing')
   const [endsPerRound, setEndsPerRound] = useState(DEFAULT_ENDS_PER_ROUND)
+  const [endsPerRoundInput, setEndsPerRoundInput] = useState(String(DEFAULT_ENDS_PER_ROUND))
   const [currentEndIndex, setCurrentEndIndex] = useState(0)
   const [currentRound, setCurrentRound] = useState<End[]>(() =>
     Array.from({ length: DEFAULT_ENDS_PER_ROUND }, generateEndTemplate),
@@ -257,18 +258,48 @@ const App = () => {
     </div>
   )
 
-  const handleEndsPerRoundChange = (value: number) => {
-    const clamped = Math.min(MAX_ENDS, Math.max(MIN_ENDS, Math.floor(value)))
+  const clampEndsPerRound = (value: number) => Math.min(MAX_ENDS, Math.max(MIN_ENDS, Math.floor(value)))
+
+  const handleEndsPerRoundInputChange = (value: string) => {
+    setEndsPerRoundInput(value)
+    if (value === '') {
+      return
+    }
+
+    const parsed = Number(value)
+    if (Number.isNaN(parsed)) {
+      return
+    }
+
+    const clamped = clampEndsPerRound(parsed)
     setEndsPerRound(clamped)
+  }
+
+  const handleEndsPerRoundInputBlur = () => {
+    if (endsPerRoundInput === '') {
+      setEndsPerRoundInput(String(endsPerRound))
+      return
+    }
+
+    const parsed = Number(endsPerRoundInput)
+    if (Number.isNaN(parsed)) {
+      setEndsPerRoundInput(String(endsPerRound))
+      return
+    }
+
+    const clamped = clampEndsPerRound(parsed)
+    setEndsPerRound(clamped)
+    setEndsPerRoundInput(String(clamped))
   }
 
   const newPracticeView = (
     <div className="flex flex-col gap-6 w-full max-w-sm mx-auto">
       <EndsPerRoundSelector
-        endsPerRound={endsPerRound}
+        value={endsPerRoundInput}
         minEnds={MIN_ENDS}
         maxEnds={MAX_ENDS}
-        onChange={handleEndsPerRoundChange}
+        onChange={handleEndsPerRoundInputChange}
+        onBlur={handleEndsPerRoundInputBlur}
       />
 
       <Target
@@ -354,7 +385,7 @@ const App = () => {
         ) : (
           <div className="header-spacer" />
         )}
-        <h1 className="app-title">Artemis Tracker</h1>
+        <h1 className="app-title">Artemis</h1>
         <div className="header-spacer" />
       </header>
       <main className="app-main">
