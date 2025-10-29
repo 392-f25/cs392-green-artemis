@@ -1,4 +1,4 @@
-export type View = 'landing' | 'new-practice' | 'stats' | 'feed'
+export type View = 'landing' | 'new-practice' | 'stats'
 
 export type Shot = {
   x: number
