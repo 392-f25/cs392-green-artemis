@@ -223,6 +223,19 @@ const App = () => {
     if (!activeShot || !end || end.shots.length >= SHOTS_PER_END) return
     updateEndWithShot(activeShot)
     setActiveShot(null)
+    
+    // Automatically move to next end if current end will be complete after this shot
+    if (end.shots.length + 1 === SHOTS_PER_END) {
+      // Use setTimeout to allow state to update first
+      setTimeout(() => {
+        const nextIncompleteIndex = currentRound.findIndex((e, index) => index > currentEndIndex && e.shots.length < SHOTS_PER_END)
+        if (nextIncompleteIndex !== -1) {
+          setCurrentEndIndex(nextIncompleteIndex)
+        } else if (currentEndIndex < endsPerRound - 1) {
+          setCurrentEndIndex(currentEndIndex + 1)
+        }
+      }, 300) // Small delay for better UX
+    }
   }
 
   const currentEnd = currentRound[currentEndIndex]
@@ -230,18 +243,7 @@ const App = () => {
 
   const canConfirmShot = Boolean(activeShot) && shotsInCurrentEnd.length < SHOTS_PER_END
   const shotsRemainingInEnd = Math.max(0, SHOTS_PER_END - shotsInCurrentEnd.length)
-  const isEndComplete = shotsInCurrentEnd.length === SHOTS_PER_END
   const isRoundComplete = currentRound.length === endsPerRound && currentRound.every(end => end.shots.length === SHOTS_PER_END)
-
-  const handleSaveEnd = () => {
-    if (!isEndComplete) return
-    const nextIncompleteIndex = currentRound.findIndex((end, index) => index > currentEndIndex && end.shots.length < SHOTS_PER_END)
-    if (nextIncompleteIndex !== -1) {
-      setCurrentEndIndex(nextIncompleteIndex)
-    } else {
-      setCurrentEndIndex(Math.min(currentEndIndex + 1, endsPerRound - 1))
-    }
-  }
 
   const handleSaveRound = () => {
     if (!isRoundComplete) return
@@ -576,9 +578,9 @@ const App = () => {
         <p className="text-lg font-semibold">End {currentEndIndex + 1} of {endsPerRound}</p>
         <p className="text-sm text-slate-300">Shots taken: {shotsInCurrentEnd.length} / {SHOTS_PER_END}</p>
         {shotsRemainingInEnd > 0 ? (
-          <p className="text-xs text-slate-400">{shotsRemainingInEnd} shot{shotsRemainingInEnd === 1 ? '' : 's'} remaining in this end</p>
+          <p className="text-sm text-slate-400 font-semibold">{shotsRemainingInEnd} shot{shotsRemainingInEnd === 1 ? '' : 's'} remaining in this end</p>
         ) : (
-          <p className="text-xs text-emerald-400">End complete</p>
+          <p className="text-sm text-emerald-400 font-semibold">End complete</p>
         )}
         <p className="text-sm text-slate-300">End score: {currentEnd?.endScore ?? 0}</p>
       </div>
@@ -592,10 +594,10 @@ const App = () => {
       <div className="flex flex-col gap-2">
         <button
           className="primary-button"
-          onClick={canConfirmShot ? handleConfirmShot : handleSaveEnd}
-          disabled={canConfirmShot ? false : !isEndComplete}
+          onClick={handleConfirmShot}
+          disabled={!canConfirmShot}
         >
-          {canConfirmShot ? 'Confirm Shot' : 'Save End'}
+          Confirm Shot
         </button>
         <button
           className="secondary-button"
