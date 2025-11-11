@@ -1,7 +1,7 @@
 import type { MouseEvent } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
-import type { View, Shot, End, Round, StoredRound, StoredShot } from './utils/types'
+import type { View, Shot, End, Round } from './utils/types'
 import { RING_COUNT, SHOTS_PER_END, DEFAULT_ENDS_PER_ROUND, MIN_ENDS, MAX_ENDS } from './utils/constants'
 import { generateEndTemplate, calculateScore, generateRingColors, calculateEndPrecision } from './utils/helpers'
 import { Target } from './components/Target'
@@ -10,6 +10,7 @@ import { EndsPerRoundSelector } from './components/EndsPerRoundSelector'
 import { StatsView } from './components/StatsView'
 import { auth, googleProvider } from './firebase'
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
+import { saveRoundToFirestore, loadRoundsFromFirestore } from './utils/firestore'
 
 const App = () => {
   const [view, setView] = useState<View>('landing')
@@ -22,10 +23,27 @@ const App = () => {
   const [activeShot, setActiveShot] = useState<Shot | null>(null)
   const [rounds, setRounds] = useState<Round[]>([])
   const [user, setUser] = useState<User | null>(null)
+  const [isLoadingRounds, setIsLoadingRounds] = useState(false)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, current => {
+    const unsubscribe = onAuthStateChanged(auth, async current => {
       setUser(current)
+      
+      // Load rounds from Firestore when user signs in
+      if (current) {
+        setIsLoadingRounds(true)
+        try {
+          const firestoreRounds = await loadRoundsFromFirestore(current.uid)
+          setRounds(firestoreRounds)
+        } catch (error) {
+          console.error('Failed to load rounds from Firestore:', error)
+        } finally {
+          setIsLoadingRounds(false)
+        }
+      } else {
+        // Clear rounds when user signs out
+        setRounds([])
+      }
     })
     return () => unsubscribe()
   }, [])
@@ -46,123 +64,7 @@ const App = () => {
     }
   }
 
-  useEffect(() => {
-    const stored = localStorage.getItem('archery-rounds')
-    if (!stored) {
-      return
-    }
-
-    try {
-      const parsed: unknown = JSON.parse(stored)
-      if (!Array.isArray(parsed)) {
-        return
-      }
-
-      const hydrated = parsed
-        .map(item => {
-          if (typeof item !== 'object' || item === null) {
-            return null
-          }
-
-          if ('round' in item && typeof item.round === 'object' && item.round !== null) {
-            const storedRound = item as StoredRound
-            const ends = Object.keys(storedRound.round ?? {})
-              .sort()
-              .map(endKey => {
-                const storedShots = storedRound.round?.[endKey] ?? {}
-                const orderedShots = Object.keys(storedShots)
-                  .sort()
-                  .map(shotKey => storedShots[shotKey])
-                  .filter(
-                    (entry): entry is StoredShot | number =>
-                      typeof entry === 'number' || (typeof entry === 'object' && entry !== null && 'score' in entry),
-                  )
-                  .slice(0, SHOTS_PER_END)
-
-                const shots: Shot[] = orderedShots.map(entry => {
-                  if (typeof entry === 'number') {
-                    return { x: 0, y: 0, score: entry }
-                  }
-                  const shotScore = typeof entry.score === 'number' ? entry.score : 0
-                  const shotX = typeof entry.x === 'number' ? entry.x : 0
-                  const shotY = typeof entry.y === 'number' ? entry.y : 0
-                  return { x: shotX, y: shotY, score: shotScore }
-                })
-
-                const endScore = shots.reduce((total, shot) => total + shot.score, 0)
-                const precision = calculateEndPrecision(shots)
-                return { shots, endScore, precision }
-              })
-
-            const totalScore = storedRound.totalScore ?? ends.reduce((total, end) => total + end.endScore, 0)
-
-            return {
-              id: storedRound.id ?? crypto.randomUUID(),
-              createdAt: storedRound.createdAt ?? new Date().toISOString(),
-              ends,
-              totalScore,
-            }
-          }
-
-          if ('ends' in item) {
-            const roundCandidate = item as Partial<Round>
-            const ends = (roundCandidate.ends ?? []).map(end => {
-              const shots = (end?.shots ?? []).map(shot => ({
-                x: typeof shot?.x === 'number' ? shot.x : 0,
-                y: typeof shot?.y === 'number' ? shot.y : 0,
-                score: typeof shot?.score === 'number' ? shot.score : 0,
-              })).slice(0, SHOTS_PER_END)
-              const endScore = end?.endScore ?? shots.reduce((total, shot) => total + shot.score, 0)
-              const precision = calculateEndPrecision(shots)
-              return { shots, endScore, precision }
-            })
-            const totalScore = roundCandidate.totalScore ?? ends.reduce((total, end) => total + end.endScore, 0)
-            return {
-              id: roundCandidate.id ?? crypto.randomUUID(),
-              createdAt: roundCandidate.createdAt ?? new Date().toISOString(),
-              ends,
-              totalScore,
-            }
-          }
-
-          return null
-        })
-        .filter((round): round is Round => round !== null)
-
-      if (hydrated.length > 0) {
-        setRounds(hydrated)
-      }
-    } catch (err) {
-      console.error('Failed to parse rounds', err)
-    }
-  }, [])
-
-  useEffect(() => {
-    const payload: StoredRound[] = rounds.map(round => {
-      const roundData = round.ends.reduce<Record<string, Record<string, StoredShot>>>((acc, end, endIndex) => {
-        const endKey = `end${String(endIndex + 1).padStart(2, '0')}`
-        const shotEntries: Record<string, StoredShot> = {}
-        end.shots.forEach((shot, shotIndex) => {
-          const shotKey = `shot${shotIndex + 1}`
-          shotEntries[shotKey] = {
-            x: shot.x,
-            y: shot.y,
-            score: shot.score,
-          }
-        })
-        acc[endKey] = shotEntries
-        return acc
-      }, {})
-
-      return {
-        id: round.id,
-        createdAt: round.createdAt,
-        totalScore: round.totalScore,
-        round: roundData,
-      }
-    })
-    localStorage.setItem('archery-rounds', JSON.stringify(payload))
-  }, [rounds])
+  // Note: We save rounds individually when they're created (see handleSaveRound)
 
   const ringColors = useMemo(() => generateRingColors(RING_COUNT), [])
 
@@ -245,8 +147,8 @@ const App = () => {
   const shotsRemainingInEnd = Math.max(0, SHOTS_PER_END - shotsInCurrentEnd.length)
   const isRoundComplete = currentRound.length === endsPerRound && currentRound.every(end => end.shots.length === SHOTS_PER_END)
 
-  const handleSaveRound = () => {
-    if (!isRoundComplete) return
+  const handleSaveRound = async () => {
+    if (!isRoundComplete || !user) return
     const normalizedEnds = currentRound.map(end => ({
       shots: end.shots.slice(0, SHOTS_PER_END),
       endScore: end.shots.slice(0, SHOTS_PER_END).reduce((total, shot) => total + shot.score, 0),
@@ -259,8 +161,17 @@ const App = () => {
       ends: normalizedEnds,
       totalScore,
     }
-    setRounds(prev => [...prev, round])
-    setView('landing')
+    
+    // Save to Firestore first
+    try {
+      await saveRoundToFirestore(user.uid, round)
+      // Only update local state after successful save
+      setRounds(prev => [round, ...prev])
+      setView('landing')
+    } catch (error) {
+      console.error('Failed to save round:', error)
+      alert('Failed to save your practice session. Please try again.')
+    }
   }
 
   const handleResetEnd = () => {
@@ -272,168 +183,18 @@ const App = () => {
     setActiveShot(null)
   }
 
-  const inspirationalFeed = useMemo(() => {
-    const createShot = (x: number, y: number): Shot => ({
-      x,
-      y,
-      score: calculateScore(x, y),
-    })
-
-    const toShots = (pairs: number[][]) =>
-      pairs.map(pair => {
-        const [x = 0, y = 0] = pair
-        return createShot(x, y)
-      })
-
-    const basePosts = [
-      {
-        id: 'feed-amy',
-        username: 'archer-amy',
-        notes: 'Dialed in on gold with a new clicker timing drill.',
-        shotGroups: [
-          [
-            [0.03, -0.02],
-            [-0.05, 0.04],
-            [0.06, 0.01],
-          ],
-          [
-            [0.12, -0.08],
-            [-0.18, 0.01],
-            [0.22, -0.05],
-          ],
-          [
-            [0.09, 0.02],
-            [-0.11, -0.08],
-            [0.14, 0.1],
-          ],
-          [
-            [-0.06, -0.07],
-            [0.03, 0.11],
-            [-0.16, 0.12],
-          ],
-          [
-            [0.02, 0.09],
-            [-0.12, -0.14],
-            [0.19, -0.06],
-          ],
-          [
-            [0.08, -0.04],
-            [-0.09, 0.07],
-            [0.12, 0.18],
-          ],
-        ],
-      },
-      {
-        id: 'feed-raj',
-        username: 'recurve-raj',
-        notes: 'Pushed through a wet session and stayed disciplined with follow-through.',
-        shotGroups: [
-          [
-            [0.18, -0.05],
-            [0.09, 0.04],
-            [-0.13, 0.06],
-          ],
-          [
-            [-0.22, 0.04],
-            [0.2, -0.12],
-            [0.11, 0.15],
-          ],
-          [
-            [0.05, -0.09],
-            [-0.07, -0.12],
-            [0.02, -0.18],
-          ],
-          [
-            [0.16, 0.09],
-            [-0.18, -0.07],
-            [0.23, 0.04],
-          ],
-          [
-            [-0.09, 0.02],
-            [0.07, 0.11],
-            [-0.14, 0.18],
-          ],
-          [
-            [0.1, -0.14],
-            [-0.21, 0.03],
-            [0.04, 0.21],
-          ],
-          [
-            [-0.05, -0.05],
-            [0.03, 0.04],
-            [-0.02, 0.08],
-          ],
-          [
-            [0.24, -0.16],
-            [-0.18, 0.14],
-            [0.12, -0.2],
-          ],
-        ],
-      },
-      {
-        id: 'feed-kim',
-        username: 'coach-kim',
-        notes: 'Working with the recurve squad on cadence—tightened groups every end.',
-        shotGroups: [
-          [
-            [0.04, -0.03],
-            [0.01, 0.06],
-            [-0.05, 0.02],
-          ],
-          [
-            [-0.08, -0.09],
-            [0.11, 0.08],
-            [-0.1, 0.12],
-          ],
-          [
-            [0.14, -0.02],
-            [0.09, -0.15],
-            [-0.13, -0.11],
-          ],
-          [
-            [-0.02, 0.09],
-            [0.06, 0.13],
-            [-0.09, 0.18],
-          ],
-          [
-            [0.03, -0.11],
-            [-0.07, -0.15],
-            [0.08, 0.2],
-          ],
-        ],
-      },
-    ]
-
-    return basePosts.map(post => {
-      const ends = post.shotGroups.map(group => {
-        const shots = toShots(group)
-        const endScore = shots.reduce((total, shot) => total + shot.score, 0)
-        const precision = calculateEndPrecision(shots)
-        return { shots, endScore, precision }
-      })
-
-      const totalScore = ends.reduce((total, end) => total + end.endScore, 0)
-      const averagePerEnd = totalScore / ends.length
-      const bestEnd = Math.max(...ends.map(end => end.endScore))
-      const averageSpacing =
-        ends.reduce((sum, end) => sum + end.precision, 0) / (ends.length || 1)
-
-      return {
-        id: post.id,
-        username: post.username,
-        notes: post.notes,
-        endsPerRound: ends.length,
-        totalScore,
-        stats: {
-          averagePerEnd: `${averagePerEnd.toFixed(1)} pts`,
-          bestEnd: `${bestEnd} pts`,
-          totalScore: `${totalScore} pts`,
-          avgSpacing: `${averageSpacing.toFixed(2)} units`,
-        },
-        shots: ends.flatMap(end => end.shots),
-      }
-    })
-  }, [calculateEndPrecision, calculateScore])
+  const formatDate = (isoString: string) => {
+    const date = new Date(isoString)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+    
+    if (diffDays === 0) return 'Today'
+    if (diffDays === 1) return 'Yesterday'
+    if (diffDays < 7) return `${diffDays} days ago`
+    
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  }
 
   const landingView = (
     <div className="flex flex-col gap-6 w-full max-w-2xl mx-auto">
@@ -449,74 +210,89 @@ const App = () => {
       <section className="feed-panel">
         <header className="feed-panel__header">
           <div className="feed-panel__title-group">
-            <span className="feed-panel__badge">Community</span>
-            <h2 className="feed-panel__title">Activity Feed</h2>
+            <span className="feed-panel__badge">Your Practice</span>
+            <h2 className="feed-panel__title">Practice History</h2>
           </div>
-          <button className="feed-panel__refresh" type="button">
-            Refresh
-          </button>
         </header>
 
-        <div className="feed-grid">
-          {inspirationalFeed.map(post => (
-            <article key={post.id} className="feed-card">
-              <div className="feed-card__header">
-                <div className="feed-card__avatar" aria-hidden="true">
-                  {post.username.slice(0, 2).toUpperCase()}
-                </div>
-                <div className="feed-card__meta">
-                  <span className="feed-card__username">@{post.username}</span>
-                  <span className="feed-card__subtitle">{post.endsPerRound} ends · Placeholder league</span>
-                </div>
-                <button className="feed-card__more" type="button" aria-label="More options">
-                  ···
-                </button>
-              </div>
+        {isLoadingRounds ? (
+          <div className="text-center py-12 text-slate-300">
+            <p>Loading your practice sessions...</p>
+          </div>
+        ) : rounds.length === 0 ? (
+          <div className="text-center py-12 text-slate-300">
+            <p className="text-lg mb-2">No practice sessions yet</p>
+            <p className="text-sm text-slate-400">Click "Add Practice Session" to get started!</p>
+          </div>
+        ) : (
+          <div className="feed-grid">
+            {rounds.map(round => {
+              const allShots = round.ends.flatMap(end => end.shots)
+              const averagePerEnd = round.totalScore / round.ends.length
+              const bestEnd = Math.max(...round.ends.map(end => end.endScore))
+              const averageSpacing = round.ends.reduce((sum, end) => sum + end.precision, 0) / round.ends.length
 
-              <div className="feed-card__body">
-                <div className="feed-card__stats">
-                  {[{ label: 'Avg / End', value: post.stats.averagePerEnd }, { label: 'Best End', value: post.stats.bestEnd }, { label: 'Total Score', value: post.stats.totalScore }, { label: 'Avg Spacing', value: post.stats.avgSpacing }].map(stat => (
-                    <div key={`${post.id}-${stat.label}`} className="feed-card__stat">
-                      <span className="feed-card__stat-label">{stat.label}</span>
-                      <span className="feed-card__stat-value">{stat.value}</span>
+              return (
+                <article key={round.id} className="feed-card">
+                  <div className="feed-card__header">
+                    <div className="feed-card__avatar" aria-hidden="true">
+                      {user?.displayName?.slice(0, 2).toUpperCase() || user?.email?.slice(0, 2).toUpperCase() || 'ME'}
                     </div>
-                  ))}
-                </div>
-
-                <div className="feed-card__thumbnail" role="img" aria-label={`Target snapshot for ${post.username}`}>
-                  <div className="feed-card__thumbnail-inner">
-                    <div className="feed-card__target">
-                      {ringColors.map((color, index) => (
-                        <span
-                          key={index}
-                          className="feed-card__target-ring"
-                          style={{
-                            backgroundColor: color,
-                            width: `${((ringColors.length - index) / ringColors.length) * 100}%`,
-                            height: `${((ringColors.length - index) / ringColors.length) * 100}%`,
-                          }}
-                        />
-                      ))}
-                      {post.shots.map((shot, shotIndex) => (
-                        <span
-                          key={`${post.id}-shot-${shotIndex}`}
-                          className="feed-card__target-shot"
-                          style={{
-                            left: `${(shot.x + 1) * 50}%`,
-                            top: `${(shot.y + 1) * 50}%`,
-                          }}
-                        />
-                      ))}
+                    <div className="feed-card__meta">
+                      <span className="feed-card__username">{user?.displayName || user?.email || 'You'}</span>
+                      <span className="feed-card__subtitle">{round.ends.length} ends · {formatDate(round.createdAt)}</span>
                     </div>
                   </div>
-                  <span className="feed-card__thumbnail-caption">Recent ends preview</span>
-                </div>
 
-                <p className="feed-card__notes">{post.notes}</p>
-              </div>
-            </article>
-          ))}
-        </div>
+                  <div className="feed-card__body">
+                    <div className="feed-card__stats">
+                      {[
+                        { label: 'Avg / End', value: `${averagePerEnd.toFixed(1)} pts` },
+                        { label: 'Best End', value: `${bestEnd} pts` },
+                        { label: 'Total Score', value: `${round.totalScore} pts` },
+                        { label: 'Avg Spacing', value: `${averageSpacing.toFixed(2)} units` }
+                      ].map(stat => (
+                        <div key={`${round.id}-${stat.label}`} className="feed-card__stat">
+                          <span className="feed-card__stat-label">{stat.label}</span>
+                          <span className="feed-card__stat-value">{stat.value}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="feed-card__thumbnail" role="img" aria-label="Target snapshot">
+                      <div className="feed-card__thumbnail-inner">
+                        <div className="feed-card__target">
+                          {ringColors.map((color, index) => (
+                            <span
+                              key={index}
+                              className="feed-card__target-ring"
+                              style={{
+                                backgroundColor: color,
+                                width: `${((ringColors.length - index) / ringColors.length) * 100}%`,
+                                height: `${((ringColors.length - index) / ringColors.length) * 100}%`,
+                              }}
+                            />
+                          ))}
+                          {allShots.map((shot, shotIndex) => (
+                            <span
+                              key={`${round.id}-shot-${shotIndex}`}
+                              className="feed-card__target-shot"
+                              style={{
+                                left: `${(shot.x + 1) * 50}%`,
+                                top: `${(shot.y + 1) * 50}%`,
+                              }}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                      <span className="feed-card__thumbnail-caption">All shots from this session</span>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+        )}
       </section>
     </div>
   )
