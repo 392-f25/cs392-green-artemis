@@ -1,4 +1,4 @@
-import type { MouseEvent } from 'react'
+import type { MouseEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import type { View, Shot, End, Round } from './utils/types'
@@ -12,8 +12,40 @@ import { auth, googleProvider } from './firebase'
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
 import { saveRoundToFirestore, loadRoundsFromFirestore } from './utils/firestore'
 
+const HomeIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 10.5 12 3l9 7.5" />
+    <path d="M5 10v10h14V10" />
+    <path d="M9 21v-6h6v6" />
+  </svg>
+)
+
+const RecordIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" />
+    <circle cx="12" cy="12" r="5" />
+    <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
+  </svg>
+)
+
+const StatsIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M4 19h16" />
+    <path d="M8 19V9" />
+    <path d="M12 19V5" />
+    <path d="M16 19v-7" />
+  </svg>
+)
+
+const ProfileIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+    <circle cx="12" cy="7" r="4" />
+  </svg>
+)
+
 const App = () => {
-  const [view, setView] = useState<View>('landing')
+  const [view, setView] = useState<View>('home')
   const [endsPerRound, setEndsPerRound] = useState(DEFAULT_ENDS_PER_ROUND)
   const [endsPerRoundInput, setEndsPerRoundInput] = useState(String(DEFAULT_ENDS_PER_ROUND))
   const [currentEndIndex, setCurrentEndIndex] = useState(0)
@@ -59,6 +91,7 @@ const App = () => {
   const handleSignOut = async () => {
     try {
       await signOut(auth)
+      setView('home')
     } catch (err) {
       console.error('Sign-out failed', err)
     }
@@ -75,7 +108,7 @@ const App = () => {
   }
 
   useEffect(() => {
-    if (view === 'new-practice') {
+    if (view === 'record') {
       resetRoundState()
     }
   }, [view, endsPerRound])
@@ -144,7 +177,6 @@ const App = () => {
   const shotsInCurrentEnd = currentEnd?.shots ?? []
 
   const canConfirmShot = Boolean(activeShot) && shotsInCurrentEnd.length < SHOTS_PER_END
-  const shotsRemainingInEnd = Math.max(0, SHOTS_PER_END - shotsInCurrentEnd.length)
   const isRoundComplete = currentRound.length === endsPerRound && currentRound.every(end => end.shots.length === SHOTS_PER_END)
 
   const handleSaveRound = async () => {
@@ -167,7 +199,9 @@ const App = () => {
       await saveRoundToFirestore(user.uid, round)
       // Only update local state after successful save
       setRounds(prev => [round, ...prev])
-      setView('landing')
+      resetRoundState()
+      setEndsPerRoundInput(String(endsPerRound))
+      setView('home')
     } catch (error) {
       console.error('Failed to save round:', error)
       alert('Failed to save your practice session. Please try again.')
@@ -195,107 +229,6 @@ const App = () => {
 
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
-
-  const landingView = (
-    <div className="flex flex-col gap-6 w-full max-w-2xl mx-auto">
-      <div className="flex flex-col gap-2 sm:flex-row sm:justify-center">
-        <button className="primary-button" onClick={() => setView('new-practice')}>
-          Add Practice Session
-        </button>
-        <button className="secondary-button" onClick={() => setView('stats')}>
-          View Stats
-        </button>
-      </div>
-
-      <section className="feed-panel">
-        <header className="feed-panel__header">
-          <div className="feed-panel__title-group">
-            <span className="feed-panel__badge">Your Practice</span>
-            <h2 className="feed-panel__title">Practice History</h2>
-          </div>
-        </header>
-
-        {isLoadingRounds ? (
-          <div className="text-center py-12 text-slate-300">
-            <p>Loading your practice sessions...</p>
-          </div>
-        ) : rounds.length === 0 ? (
-          <div className="text-center py-12 text-slate-300">
-            <p className="text-lg mb-2">No practice sessions yet</p>
-            <p className="text-sm text-slate-400">Click "Add Practice Session" to get started!</p>
-          </div>
-        ) : (
-          <div className="feed-grid">
-            {rounds.map(round => {
-              const allShots = round.ends.flatMap(end => end.shots)
-              const averagePerEnd = round.totalScore / round.ends.length
-              const bestEnd = Math.max(...round.ends.map(end => end.endScore))
-              const averageSpacing = round.ends.reduce((sum, end) => sum + end.precision, 0) / round.ends.length
-
-              return (
-                <article key={round.id} className="feed-card">
-                  <div className="feed-card__header">
-                    <div className="feed-card__avatar" aria-hidden="true">
-                      {user?.displayName?.slice(0, 2).toUpperCase() || user?.email?.slice(0, 2).toUpperCase() || 'ME'}
-                    </div>
-                    <div className="feed-card__meta">
-                      <span className="feed-card__username">{user?.displayName || user?.email || 'You'}</span>
-                      <span className="feed-card__subtitle">{round.ends.length} ends · {formatDate(round.createdAt)}</span>
-                    </div>
-                  </div>
-
-                  <div className="feed-card__body">
-                    <div className="feed-card__stats">
-                      {[
-                        { label: 'Avg / End', value: `${averagePerEnd.toFixed(1)} pts` },
-                        { label: 'Best End', value: `${bestEnd} pts` },
-                        { label: 'Total Score', value: `${round.totalScore} pts` },
-                        { label: 'Avg Spacing', value: `${averageSpacing.toFixed(2)} units` }
-                      ].map(stat => (
-                        <div key={`${round.id}-${stat.label}`} className="feed-card__stat">
-                          <span className="feed-card__stat-label">{stat.label}</span>
-                          <span className="feed-card__stat-value">{stat.value}</span>
-                        </div>
-                      ))}
-                    </div>
-
-                    <div className="feed-card__thumbnail" role="img" aria-label="Target snapshot">
-                      <div className="feed-card__thumbnail-inner">
-                        <div className="feed-card__target">
-                          {ringColors.map((color, index) => (
-                            <span
-                              key={index}
-                              className="feed-card__target-ring"
-                              style={{
-                                backgroundColor: color,
-                                width: `${((ringColors.length - index) / ringColors.length) * 100}%`,
-                                height: `${((ringColors.length - index) / ringColors.length) * 100}%`,
-                              }}
-                            />
-                          ))}
-                          {allShots.map((shot, shotIndex) => (
-                            <span
-                              key={`${round.id}-shot-${shotIndex}`}
-                              className="feed-card__target-shot"
-                              style={{
-                                left: `${(shot.x + 1) * 50}%`,
-                                top: `${(shot.y + 1) * 50}%`,
-                              }}
-                            />
-                          ))}
-                        </div>
-                      </div>
-                      <span className="feed-card__thumbnail-caption">All shots from this session</span>
-                    </div>
-                  </div>
-                </article>
-              )
-            })}
-          </div>
-        )}
-      </section>
-    </div>
-  )
 
   const clampEndsPerRound = (value: number) => Math.min(MAX_ENDS, Math.max(MIN_ENDS, Math.floor(value)))
 
@@ -331,82 +264,164 @@ const App = () => {
     setEndsPerRoundInput(String(clamped))
   }
 
-  const newPracticeView = (
-    <div className="flex flex-col gap-6 w-full max-w-sm mx-auto">
-      <EndsPerRoundSelector
-        value={endsPerRoundInput}
-        minEnds={MIN_ENDS}
-        maxEnds={MAX_ENDS}
-        onChange={handleEndsPerRoundInputChange}
-        onBlur={handleEndsPerRoundInputBlur}
-      />
+  const userInitials = useMemo(() => {
+    if (user?.displayName) {
+      return user.displayName
+        .trim()
+        .split(/\s+/)
+        .map(part => part[0] ?? '')
+        .join('')
+        .slice(0, 2)
+        .toUpperCase() || 'AR'
+    }
+    if (user?.email) {
+      return user.email.slice(0, 2).toUpperCase()
+    }
+    return 'AR'
+  }, [user])
 
-      <Target
-        ringColors={ringColors}
-        currentRound={currentRound}
-        currentEndIndex={currentEndIndex}
-        activeShot={activeShot}
-        onTargetClick={handleTargetClick}
-        ringCount={RING_COUNT}
-      />
+  const userDisplayName = user?.displayName || user?.email || 'Archer'
 
-      <div className="text-center text-slate-200">
-        <p className="text-lg font-semibold">End {currentEndIndex + 1} of {endsPerRound}</p>
-        <p className="text-sm text-slate-300">Shots taken: {shotsInCurrentEnd.length} / {SHOTS_PER_END}</p>
-        {shotsRemainingInEnd > 0 ? (
-          <p className="text-sm text-slate-400 font-semibold">{shotsRemainingInEnd} shot{shotsRemainingInEnd === 1 ? '' : 's'} remaining in this end</p>
-        ) : (
-          <p className="text-sm text-emerald-400 font-semibold">End complete</p>
-        )}
-        <p className="text-sm text-slate-300">End score: {currentEnd?.endScore ?? 0}</p>
+  const orderedRounds = useMemo(
+    () =>
+      [...rounds].sort(
+        (first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime(),
+      ),
+    [rounds],
+  )
+
+  const homeView = (
+    <div className="home-page">
+      <button type="button" className="home-record-button" onClick={() => setView('record')}>
+        Record New Practice
+      </button>
+
+      {isLoadingRounds ? (
+        <div className="practice-placeholder">
+          <p className="practice-placeholder__title">Loading your sessions…</p>
+        </div>
+      ) : orderedRounds.length === 0 ? (
+        <div className="practice-placeholder">
+          <p className="practice-placeholder__title">No practice sessions yet</p>
+          <p className="practice-placeholder__subtitle">Tap "Record New Practice" to get started.</p>
+        </div>
+      ) : (
+        <div className="practice-list">
+          {orderedRounds.map(round => {
+            const endCount = Math.max(round.ends.length, 1)
+            const bestEnd = round.ends.length > 0 ? Math.max(...round.ends.map(end => end.endScore)) : 0
+            const averagePerEnd = round.totalScore / endCount
+
+            return (
+              <article key={round.id} className="home-card">
+                <header className="home-card__header">
+                  <div className="home-card__avatar" aria-hidden="true">
+                    {userInitials}
+                  </div>
+                  <div className="home-card__meta">
+                    <span className="home-card__name">{userDisplayName}</span>
+                    <span className="home-card__details">{formatDate(round.createdAt)} · {round.ends.length} ends</span>
+                  </div>
+                </header>
+                <div className="home-card__metrics">
+                  <div className="home-card__metric">
+                    <span className="home-card__metric-label">Total Score</span>
+                    <span className="home-card__metric-value">{round.totalScore}</span>
+                  </div>
+                  <div className="home-card__metric">
+                    <span className="home-card__metric-label">Avg / End</span>
+                    <span className="home-card__metric-value">{averagePerEnd.toFixed(1)}</span>
+                  </div>
+                  <div className="home-card__metric">
+                    <span className="home-card__metric-label">Best End</span>
+                    <span className="home-card__metric-value">{bestEnd}</span>
+                  </div>
+                </div>
+              </article>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+
+  const recordView = (
+    <div className="record-page">
+      <div className="record-panel">
+        <EndsPerRoundSelector
+          value={endsPerRoundInput}
+          minEnds={MIN_ENDS}
+          maxEnds={MAX_ENDS}
+          onChange={handleEndsPerRoundInputChange}
+          onBlur={handleEndsPerRoundInputBlur}
+        />
+
+        <p className="record-instructions">Tap target to place shot. Confirm to lock it in.</p>
+
+        <Target
+          ringColors={ringColors}
+          currentRound={currentRound}
+          currentEndIndex={currentEndIndex}
+          activeShot={activeShot}
+          onTargetClick={handleTargetClick}
+          ringCount={RING_COUNT}
+        />
+
+        <div className="record-summary">
+          <p className="record-summary__title">End {currentEndIndex + 1} of {endsPerRound}</p>
+          <p className="record-summary__text">Shots taken: {shotsInCurrentEnd.length} / {SHOTS_PER_END}</p>
+        </div>
+
+        <EndSummary currentRound={currentRound} currentEndIndex={currentEndIndex} onEndClick={setCurrentEndIndex} />
+
+        <div className="record-panel__actions">
+          <button className="primary-button" onClick={handleConfirmShot} disabled={!canConfirmShot}>
+            Confirm Shot
+          </button>
+          <button className="secondary-button" onClick={handleResetEnd}>
+            Reset End
+          </button>
+          <button className="secondary-button" onClick={() => setView('home')}>
+            Cancel Round
+          </button>
+        </div>
+
+        <button className="primary-button" onClick={handleSaveRound} disabled={!isRoundComplete}>
+          Save Round
+        </button>
+  </div>
+    </div>
+  )
+
+  const statsView = (
+    <div className="stats-page">
+      <StatsView rounds={rounds} />
+    </div>
+  )
+
+  const profileView = (
+    <div className="profile-page">
+      <div className="profile-card">
+        <div className="profile-card__avatar" aria-hidden="true">{userInitials}</div>
+        <h2 className="profile-card__name">{userDisplayName}</h2>
+        {user?.email ? <p className="profile-card__email">{user.email}</p> : null}
       </div>
-
-      <EndSummary
-        currentRound={currentRound}
-        currentEndIndex={currentEndIndex}
-        onEndClick={setCurrentEndIndex}
-      />
-
-      <div className="flex flex-col gap-2">
-        <button
-          className="primary-button"
-          onClick={handleConfirmShot}
-          disabled={!canConfirmShot}
-        >
-          Confirm Shot
-        </button>
-        <button
-          className="secondary-button"
-          onClick={handleResetEnd}
-        >
-          Reset End
-        </button>
-        <button
-          className="secondary-button"
-          onClick={() => setView('landing')}
-        >
-          Cancel Round
-        </button>
-      </div>
-
-      <button
-        className="primary-button"
-        onClick={handleSaveRound}
-        disabled={!isRoundComplete}
-      >
-        Save Round
+      <button type="button" className="profile-signout-button" onClick={handleSignOut}>
+        Sign Out
       </button>
     </div>
   )
 
-  const renderView = () => {
+  const renderActiveView = () => {
     switch (view) {
-      case 'landing':
-        return landingView
-      case 'new-practice':
-        return newPracticeView
+      case 'home':
+        return homeView
+      case 'record':
+        return recordView
       case 'stats':
-        return <StatsView rounds={rounds} />
+        return statsView
+      case 'profile':
+        return profileView
       default:
         return null
     }
@@ -431,37 +446,39 @@ const App = () => {
     return signInView
   }
 
+  const navItems: Array<{ key: View; label: string; icon: ReactNode }> = [
+    { key: 'home', label: 'Home', icon: <HomeIcon /> },
+    { key: 'record', label: 'Record', icon: <RecordIcon /> },
+    { key: 'stats', label: 'Stats', icon: <StatsIcon /> },
+    { key: 'profile', label: 'Profile', icon: <ProfileIcon /> },
+  ]
+
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        {view !== 'landing' ? (
-          <button className="back-button" onClick={() => setView('landing')}>
-            Back
-          </button>
-        ) : (
-          <div className="header-spacer" />
-        )}
-        <h1 className="app-title">Artemis Tracker</h1>
-        <div className="flex items-center gap-2">
-          {user.photoURL ? (
-            <img
-              src={user.photoURL}
-              alt={user.displayName ?? 'User'}
-              className="h-8 w-8 rounded-full"
-              referrerPolicy="no-referrer"
-            />
-          ) : null}
-          <button className="secondary-button" onClick={handleSignOut}>Sign out</button>
-        </div>
+    <div className="app-shell app-shell--authenticated">
+      <header className="brand-header">
+        <h1 className="brand-logo">Artemis</h1>
+        <div className="brand-underline" aria-hidden="true" />
       </header>
       <main className="app-main">
-        {renderView()}
+        {renderActiveView()}
       </main>
-      {view === 'new-practice' && (
-        <footer className="app-footer text-slate-300 text-xs text-center">
-          Tap target to place shot. Confirm to lock it in.
-        </footer>
-      )}
+      <nav className="bottom-nav" aria-label="Primary navigation">
+        {navItems.map(item => {
+          const isActive = view === item.key
+          return (
+            <button
+              key={item.key}
+              type="button"
+              className={`bottom-nav__item ${isActive ? 'bottom-nav__item--active' : ''}`}
+              onClick={() => setView(item.key)}
+              aria-current={isActive ? 'page' : undefined}
+            >
+              <span className="bottom-nav__icon">{item.icon}</span>
+              <span className="bottom-nav__label">{item.label}</span>
+            </button>
+          )
+        })}
+      </nav>
     </div>
   )
 }
