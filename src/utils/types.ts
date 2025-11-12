@@ -37,7 +37,7 @@ export type StoredShot = {
 export type AggregateStats = {
   averagePoints: number
   averageDistanceFromCenter: number
-  averageDistanceBetweenShots: number
+  missedShots: number
   averagePrecision: number
   shotCount: number
 }

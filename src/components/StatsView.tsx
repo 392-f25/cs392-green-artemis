@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import type { AggregateStats, Round, Shot } from '../utils/types'
 import { RING_COUNT } from '../utils/constants'
-import { calculateAverage, calculateDistanceBetweenShots, calculateDistanceFromCenter, generateRingColors } from '../utils/helpers'
+import { calculateAverage, calculateDistanceFromCenter, generateRingColors } from '../utils/helpers'
 import { updateRoundNotesInFirestore } from '../utils/firestore'
 
 type StatsTab = 'history' | 'aggregate'
@@ -91,18 +91,8 @@ const computeAggregateStats = (rounds: Round[]): AggregateStats => {
   const averagePoints = calculateAverage(shots.map(shot => shot.score))
   const averageDistanceFromCenter = calculateAverage(shots.map(shot => calculateDistanceFromCenter(shot)))
 
-  const distancesBetweenShots: number[] = []
-  rounds.forEach(round => {
-    round.ends.forEach(end => {
-      for (let shotIndex = 1; shotIndex < end.shots.length; shotIndex += 1) {
-        const current = end.shots[shotIndex]
-        const previous = end.shots[shotIndex - 1]
-        distancesBetweenShots.push(calculateDistanceBetweenShots(previous, current))
-      }
-    })
-  })
-
-  const averageDistanceBetweenShots = calculateAverage(distancesBetweenShots)
+  // Count missed shots (score = 0)
+  const missedShots = shots.filter(shot => shot.score === 0).length
 
     // Calculate average precision (calculated as mean radius - average distance from group center)
   const endPrecisions = rounds.flatMap(round => 
@@ -113,7 +103,7 @@ const computeAggregateStats = (rounds: Round[]): AggregateStats => {
   return {
     averagePoints,
     averageDistanceFromCenter,
-    averageDistanceBetweenShots,
+    missedShots,
     averagePrecision,
     shotCount: shots.length,
   }
@@ -193,10 +183,22 @@ const PRACTICE_COLORS = [
 const AggregateTarget = ({ rounds }: AggregateTargetProps) => {
   const ringColors = useMemo(() => generateRingColors(RING_COUNT), [])
   const [highlightedRoundId, setHighlightedRoundId] = useState<string | null>(null)
+  const [showOnlyAverage, setShowOnlyAverage] = useState(false)
 
   const handlePracticeClick = (roundId: string) => {
+    setShowOnlyAverage(false)
     setHighlightedRoundId(prev => prev === roundId ? null : roundId)
   }
+
+  const handleAverageClick = () => {
+    setHighlightedRoundId(null)
+    setShowOnlyAverage(prev => !prev)
+  }
+
+  // Calculate average position of all shots
+  const allShots = useMemo(() => rounds.flatMap(round => round.ends.flatMap(end => end.shots)), [rounds])
+  const averageX = useMemo(() => calculateAverage(allShots.map(shot => shot.x)), [allShots])
+  const averageY = useMemo(() => calculateAverage(allShots.map(shot => shot.y)), [allShots])
 
   return (
     <div className="aggregate-target-container">
@@ -218,7 +220,7 @@ const AggregateTarget = ({ rounds }: AggregateTargetProps) => {
           const shots = round.ends.flatMap(end => end.shots)
           const practiceColor = PRACTICE_COLORS[roundIndex % PRACTICE_COLORS.length]
           const isHighlighted = highlightedRoundId === round.id
-          const isDimmed = highlightedRoundId !== null && highlightedRoundId !== round.id
+          const isDimmed = highlightedRoundId !== null && highlightedRoundId !== round.id || showOnlyAverage
 
           return shots.map((shot, shotIndex) => (
             <div
@@ -242,11 +244,49 @@ const AggregateTarget = ({ rounds }: AggregateTargetProps) => {
             />
           ))
         })}
+        {/* Average position marker - Red X */}
+        {allShots.length > 0 && !highlightedRoundId && (
+          <div
+            className={`aggregate-target__average-marker ${showOnlyAverage ? 'aggregate-target__average-marker--highlighted' : ''}`}
+            style={{
+              left: `${(averageX + 1) * 50}%`,
+              top: `${(averageY + 1) * 50}%`,
+            }}
+            aria-label="Average shot position"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M6 6L18 18M18 6L6 18" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" />
+            </svg>
+          </div>
+        )}
       </div>
       <div className="aggregate-target__legend">
+        {allShots.length > 0 && !highlightedRoundId && (
+          <div
+            className={`aggregate-target__legend-item ${showOnlyAverage ? 'aggregate-target__legend-item--highlighted' : ''}`}
+            onClick={handleAverageClick}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault()
+                handleAverageClick()
+              }
+            }}
+          >
+            <div className="aggregate-target__legend-average">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M6 6L18 18M18 6L6 18" stroke="#ef4444" strokeWidth="3" strokeLinecap="round" />
+              </svg>
+            </div>
+            <span className="aggregate-target__legend-label">
+              Average Shot Location
+            </span>
+          </div>
+        )}
         {rounds.map((round, roundIndex) => {
           const isHighlighted = highlightedRoundId === round.id
-          const isDimmed = highlightedRoundId !== null && highlightedRoundId !== round.id
+          const isDimmed = highlightedRoundId !== null && highlightedRoundId !== round.id || showOnlyAverage
 
           return (
             <div
@@ -503,12 +543,11 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
               <span className="stats-card__sublabel">units</span>
             </div>
             <div className="stats-card">
-              <span className="stats-card__label">Avg Distance Between Shots</span>
-              <span className="stats-card__value">{formatUnits(aggregateStats.averageDistanceBetweenShots)}</span>
-              <span className="stats-card__sublabel">units</span>
+              <span className="stats-card__label">Missed Shots</span>
+              <span className="stats-card__value">{aggregateStats.missedShots}</span>
             </div>
             <div className="stats-card">
-              <span className="stats-card__label">Average Precision</span>
+              <span className="stats-card__label">Avg Distance From Group Center</span>
               <span className="stats-card__value">{formatUnits(aggregateStats.averagePrecision)}</span>
               <span className="stats-card__sublabel">units per end</span>
             </div>
@@ -536,11 +575,11 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
               <div className="stats-chart__info">
                 <div className="stats-chart__info-item">
                   <span className="stats-chart__info-label" style={{ color: '#10b981' }}>Accuracy:</span>
-                  <span className="stats-chart__info-text">How close your shots are to the center (higher is better)</span>
+                  <span className="stats-chart__info-text">A measure of how close your shots are to the center out of 10 (higher is better). </span>
                 </div>
                 <div className="stats-chart__info-item">
-                  <span className="stats-chart__info-label" style={{ color: '#a78bfa' }}>Precision:</span>
-                  <span className="stats-chart__info-text">How consistent your shot grouping is (higher is better)</span>
+                  <span className="stats-chart__info-label" style={{ color: '#a78bfa' }}>Grouping Score:</span>
+                  <span className="stats-chart__info-text">A measure of how consistent your shot grouping is out of 10 (higher is better).</span>
                 </div>
               </div>
             )}
@@ -555,6 +594,7 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
                 <YAxis
                   stroke="#94a3b8"
                   style={{ fontSize: '12px' }}
+                  domain={[0, 10]}
                 />
                 <Tooltip
                   contentStyle={{
@@ -591,7 +631,7 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
                   dataKey="avgPrecision" 
                   stroke="#a78bfa" 
                   strokeWidth={2}
-                  name="Precision"
+                  name="Grouping Score"
                   dot={{ fill: '#a78bfa', r: 4 }}
                   activeDot={{ r: 6 }}
                 />

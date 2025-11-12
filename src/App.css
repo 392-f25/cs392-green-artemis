@@ -1640,6 +1640,21 @@ button {
   opacity: 0.2;
 }
 
+.aggregate-target__average-marker {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 15;
+  filter: drop-shadow(0 0 2px white) drop-shadow(0 0 2px white) drop-shadow(0 0 3px rgba(0, 0, 0, 0.5));
+}
+
+.aggregate-target__average-marker svg {
+  width: 24px;
+  height: 18px;
+}
+
 .aggregate-target__legend {
   display: flex;
   flex-wrap: wrap;
@@ -1693,6 +1708,36 @@ button {
   transform: scale(1.3);
   border-color: rgba(255, 255, 255, 0.6);
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.2);
+}
+
+.aggregate-target__legend-average {
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.aggregate-target__legend-item--highlighted .aggregate-target__legend-average {
+  transform: scale(1.3);
+}
+
+.aggregate-target__average-marker--highlighted {
+  z-index: 20 !important;
+  animation: pulse-marker 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse-marker {
+  0%, 100% {
+    transform: translate(-50%, -50%) scale(1);
+    filter: drop-shadow(0 0 3px white) drop-shadow(0 0 3px white) drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
+  }
+  50% {
+    transform: translate(-50%, -50%) scale(1.15);
+    filter: drop-shadow(0 0 4px white) drop-shadow(0 0 4px white) drop-shadow(0 0 12px rgba(239, 68, 68, 1));
+  }
 }
 
 /* Sign-in view */
