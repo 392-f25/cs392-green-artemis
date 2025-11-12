@@ -26,7 +26,7 @@ export const EndsPerRoundSelector = ({
         onBlur={onBlur}
         aria-label="Number of ends per round"
       />
-      <span className="ends-selector__hint">{minEnds}-{maxEnds}</span>
+      {/* <span className="ends-selector__hint">{minEnds}-{maxEnds}</span> */}
     </div>
   )
 }

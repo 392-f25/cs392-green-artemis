@@ -436,7 +436,7 @@ button {
 .ends-selector__input {
   flex: 0 0 68px;
   width: 68px;
-  text-align: center;
+  text-align: right;
   padding: 10px;
 }
 
@@ -888,6 +888,7 @@ button {
   color: #e2e8f0;
   font-size: 14px;
   font-weight: 600;
+  text-align: right;
 }
 
 .number-input:focus {
