@@ -26,7 +26,7 @@ describe('Ends per round input matches end cards displayed', () => {
   it('displays 8 end cards when user enters 8 in ends per round', async () => {
     render(<App />)
 
-    const addPracticeButton = await screen.findByText('Add Practice Session')
+    const addPracticeButton = await screen.findByText('Record New Practice')
     fireEvent.click(addPracticeButton)
 
     const input = await screen.findByLabelText('Number of ends per round')
@@ -46,7 +46,7 @@ describe('Ends per round input matches end cards displayed', () => {
   it('displays 3 end cards when user enters 3 in ends per round', async () => {
     render(<App />)
 
-    const addPracticeButton = await screen.findByText('Add Practice Session')
+    const addPracticeButton = await screen.findByText('Record New Practice')
     fireEvent.click(addPracticeButton)
 
     const input = await screen.findByLabelText('Number of ends per round')
@@ -65,7 +65,7 @@ describe('Ends per round input matches end cards displayed', () => {
   it('displays 12 end cards when user enters maximum in the ends per round', async () => {
     render(<App />)
 
-    const addPracticeButton = await screen.findByText('Add Practice Session')
+    const addPracticeButton = await screen.findByText('Record New Practice')
     fireEvent.click(addPracticeButton)
 
     const input = await screen.findByLabelText('Number of ends per round')
