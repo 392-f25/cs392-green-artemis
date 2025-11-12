@@ -1,5 +1,5 @@
-import { useMemo, useState, useEffect } from 'react'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
+import { useMemo, useState, useEffect, useCallback } from 'react'
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import type { AggregateStats, Round, Shot } from '../utils/types'
 import { RING_COUNT } from '../utils/constants'
 import { calculateAverage, calculateDistanceFromCenter, generateRingColors } from '../utils/helpers'
@@ -25,6 +25,14 @@ const formatDate = (timestamp: string): string => {
 }
 
 const formatUnits = (value: number, fractionDigits = 1): string => value.toFixed(fractionDigits)
+
+type MetricKey = 'avgScore' | 'avgDistance' | 'avgPrecision'
+
+const CHART_METRICS: Array<{ key: MetricKey; label: string; color: string }> = [
+  { key: 'avgScore', label: 'Average score', color: '#3b82f6' },
+  { key: 'avgDistance', label: 'Accuracy', color: '#10b981' },
+  { key: 'avgPrecision', label: 'Grouping score', color: '#a78bfa' },
+]
 
 const exportToCSV = (rounds: Round[]) => {
   // Sort rounds by date (newest first)
@@ -204,7 +212,7 @@ const AggregateTarget = ({ rounds }: AggregateTargetProps) => {
   return (
     <div className="aggregate-target-container">
       <h3 className="aggregate-target__title">All Shots Overlay</h3>
-      <p className="aggregate-target__subtitle">Click a practice to highlight its shots</p>
+      <p className="aggregate-target__subtitle">Click on a practice below to highlight its shots. </p>
       <div className="aggregate-target">
         {ringColors.map((color, index) => (
           <div
@@ -333,6 +341,61 @@ export const StatsView = ({ rounds, userId, onDeleteRound }: StatsViewProps) => 
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
+  const [highlightedMetrics, setHighlightedMetrics] = useState<Set<string>>(new Set())
+  const [isMobile, setIsMobile] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+      return
+    }
+
+    const mediaQuery = window.matchMedia('(max-width: 480px)')
+    const handleChange = (event: MediaQueryListEvent) => {
+      setIsMobile(event.matches)
+    }
+
+    setIsMobile(mediaQuery.matches)
+
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleChange)
+      return () => mediaQuery.removeEventListener('change', handleChange)
+    }
+
+    mediaQuery.addListener(handleChange)
+    return () => mediaQuery.removeListener(handleChange)
+  }, [])
+
+  const yAxisLabelRenderer = useCallback(({ viewBox }: { viewBox?: { x: number; y: number; width: number; height: number } }) => {
+    if (!viewBox) {
+      return null
+    }
+
+    const { x, y, height } = viewBox
+    const labelX = x - (isMobile ? -5 : -20)
+    const labelY = y + height / 2
+
+    return (
+      <text
+        x={labelX}
+        y={labelY}
+        fill="#94a3b8"
+        fontSize={12}
+        textAnchor="middle"
+        dominantBaseline="central"
+        transform={`rotate(-90, ${labelX}, ${labelY})`}
+      >
+        Performance Score
+      </text>
+    )
+  }, [isMobile])
+
+  const chartMargin = useMemo(() => (
+    isMobile
+      ? { top: 5, right: 20, left: 10, bottom: 28 }
+      : { top: 5, right: 40, left: 15, bottom: 30 }
+  ), [isMobile])
+
+  const chartHeight = isMobile ? 240 : 300
 
   // Initialize local notes from rounds
   useEffect(() => {
@@ -461,6 +524,20 @@ export const StatsView = ({ rounds, userId, onDeleteRound }: StatsViewProps) => 
   }
 
   const clampRange = (value: number) => Math.max(1, Math.floor(value))
+
+  const toggleMetricHighlight = (metricKey: string) => {
+    setHighlightedMetrics(prev => {
+      const next = new Set(prev)
+      if (next.has(metricKey)) {
+        next.delete(metricKey)
+      } else {
+        next.add(metricKey)
+      }
+      return next
+    })
+  }
+
+  const isMetricActive = (metricKey: string) => highlightedMetrics.size === 0 || highlightedMetrics.has(metricKey)
 
   const handleRangeInputChange = (value: string) => {
     setRangeInput(value)
@@ -641,6 +718,7 @@ export const StatsView = ({ rounds, userId, onDeleteRound }: StatsViewProps) => 
                 </svg>
               </button>
             </div>
+            <p className="stats-chart__tip">Click on a metric below to highlight its trend line.</p>
             {showMetricsInfo && (
               <div className="stats-chart__info">
                 <div className="stats-chart__info-item">
@@ -653,18 +731,20 @@ export const StatsView = ({ rounds, userId, onDeleteRound }: StatsViewProps) => 
                 </div>
               </div>
             )}
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+            <ResponsiveContainer width="100%" height={chartHeight}>
+              <LineChart data={chartData} margin={chartMargin}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
                 <XAxis
                   dataKey="practice"
                   stroke="#94a3b8"
                   style={{ fontSize: '12px' }}
+                  label={{ value: 'Practice Number', position: 'insideBottom', offset: -10, fill: '#94a3b8', fontSize: 12 }}
                 />
                 <YAxis
                   stroke="#94a3b8"
                   style={{ fontSize: '12px' }}
                   domain={[0, 10]}
+                  label={yAxisLabelRenderer}
                 />
                 <Tooltip
                   contentStyle={{
@@ -674,39 +754,67 @@ export const StatsView = ({ rounds, userId, onDeleteRound }: StatsViewProps) => 
                     color: '#e2e8f0'
                   }}
                   labelStyle={{ color: '#e2e8f0' }}
-                />
-                <Legend
-                  wrapperStyle={{ color: '#94a3b8' }}
+                  cursor={{ stroke: '#475569', strokeWidth: 2 }}
+                  wrapperStyle={{ pointerEvents: 'none' }}
                 />
                 <Line
                   type="monotone"
                   dataKey="avgScore"
                   stroke="#3b82f6"
-                  strokeWidth={2}
-                  name="Average Score"
-                  dot={{ fill: '#3b82f6', r: 4 }}
-                  activeDot={{ r: 6 }}
+                  strokeWidth={isMetricActive('avgScore') ? 3.5 : 1.5}
+                  strokeOpacity={isMetricActive('avgScore') ? 1 : 0.35}
+                  name="Average score"
+                  dot={{ r: isMetricActive('avgScore') ? 5.5 : 4, stroke: '#1f6feb', strokeWidth: 1.5, fill: '#3b82f6' }}
+                  activeDot={{ r: isMetricActive('avgScore') ? 8 : 6, strokeWidth: 0 }}
                 />
                 <Line
                   type="monotone"
                   dataKey="avgDistance"
                   stroke="#10b981"
-                  strokeWidth={2}
+                  strokeWidth={isMetricActive('avgDistance') ? 3.5 : 1.5}
+                  strokeOpacity={isMetricActive('avgDistance') ? 1 : 0.35}
                   name="Accuracy"
-                  dot={{ fill: '#10b981', r: 4 }}
-                  activeDot={{ r: 6 }}
+                  dot={{ r: isMetricActive('avgDistance') ? 5.5 : 4, stroke: '#0f766e', strokeWidth: 1.5, fill: '#10b981' }}
+                  activeDot={{ r: isMetricActive('avgDistance') ? 8 : 6, strokeWidth: 0 }}
                 />
                 <Line
                   type="monotone"
                   dataKey="avgPrecision"
                   stroke="#a78bfa"
-                  strokeWidth={2}
-                  name="Grouping Score"
-                  dot={{ fill: '#a78bfa', r: 4 }}
-                  activeDot={{ r: 6 }}
+                  strokeWidth={isMetricActive('avgPrecision') ? 3.5 : 1.5}
+                  strokeOpacity={isMetricActive('avgPrecision') ? 1 : 0.35}
+                  name="Grouping score"
+                  dot={{ r: isMetricActive('avgPrecision') ? 5.5 : 4, stroke: '#7c3aed', strokeWidth: 1.5, fill: '#a78bfa' }}
+                  activeDot={{ r: isMetricActive('avgPrecision') ? 8 : 6, strokeWidth: 0 }}
                 />
               </LineChart>
             </ResponsiveContainer>
+            <div className="stats-chart__legend">
+              {CHART_METRICS.map(metric => {
+                const isActive = isMetricActive(metric.key)
+                return (
+                  <button
+                    key={metric.key}
+                    type="button"
+                    className={`stats-chart__legend-item ${isActive ? 'stats-chart__legend-item--active' : ''}`}
+                    onClick={event => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      toggleMetricHighlight(metric.key)
+                    }}
+                    onTouchStart={event => {
+                      event.stopPropagation()
+                    }}
+                    onTouchEnd={event => {
+                      event.stopPropagation()
+                    }}
+                  >
+                    <span className="stats-chart__legend-swatch" style={{ backgroundColor: metric.color }} />
+                    <span style={{ color: metric.color }}>{metric.label}</span>
+                  </button>
+                )
+              })}
+            </div>
             <div className="stats-chart__actions">
               <button
                 className="stats-export-button"
@@ -775,7 +883,11 @@ export const StatsView = ({ rounds, userId, onDeleteRound }: StatsViewProps) => 
                       <button
                         type="button"
                         className="practice-card__delete"
-                        onClick={() => handleRequestDelete(round.id)}
+                        onClick={event => {
+                          event.preventDefault()
+                          event.stopPropagation()
+                          handleRequestDelete(round.id)
+                        }}
                         aria-label="Delete practice"
                         disabled={isDeleting && pendingDeleteId === round.id}
                       >
