@@ -41,19 +41,7 @@ button {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
-}
-
-.app-title {
-  font-size: 24px;
-  font-weight: 700;
-  margin: 0;
-  flex: 1;
-  text-align: center;
-  letter-spacing: 0.02em;
-}
-
-.back-button {
+  gap: 6px;
   background: none;
   border: 1px solid rgba(226, 232, 240, 0.2);
   color: #cbd5f5;
@@ -62,11 +50,6 @@ button {
   font-size: 14px;
   cursor: pointer;
 }
-
-.header-spacer {
-  width: 60px;
-}
-
 .back-button:active {
   transform: scale(0.98);
 }
@@ -124,18 +107,36 @@ button {
   width: 100%;
 }
 
+.home-page__header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.home-section-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  color: #fefefe;
+  flex: 1 1 auto;
+}
+
 .home-record-button {
   border: none;
   border-radius: 18px;
-  padding: 18px;
+  padding: 15px;
   font-size: 18px;
   font-weight: 700;
   background: #6964f2;
   color: #fefefe;
-  box-shadow: 0 16px 30px rgba(105, 100, 242, 0.35);
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
-  width: 100%;
+  width: auto;
+  margin: 0 0 0 auto;
+  white-space: nowrap;
+  box-shadow: 0 16px 30px rgba(66, 62, 164, 0.35);
 }
 
 .home-record-button:active {
@@ -186,32 +187,21 @@ button {
 
 .home-card__header {
   display: flex;
-  align-items: center;
-  gap: 16px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
 }
 
-.home-card__avatar {
-  width: 48px;
-  height: 48px;
-  border-radius: 16px;
-  background: #534ac1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.home-card__date {
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: 0.08em;
+  color: #fefefe;
 }
 
 .home-card__meta {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-}
-
-.home-card__name {
-  font-size: 16px;
-  font-weight: 600;
-  color: #fefefe;
+  gap: 6px;
 }
 
 .home-card__details {

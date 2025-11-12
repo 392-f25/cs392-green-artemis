@@ -291,6 +291,16 @@ const App = () => {
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
+  const formatFullDate = (isoString: string) => {
+    const date = new Date(isoString)
+    return date.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
+  }
+
+  const formatTime = (isoString: string) => {
+    const date = new Date(isoString)
+    return date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })
+  }
+
   const clampEndsPerRound = (value: number) => Math.min(MAX_ENDS, Math.max(MIN_ENDS, Math.floor(value)))
 
   const handleEndsPerRoundInputChange = (value: string) => {
@@ -351,11 +361,21 @@ const App = () => {
     [rounds],
   )
 
+  const practiceOrderMap = useMemo(() => {
+    const chronological = [...rounds].sort(
+      (first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime(),
+    )
+    return new Map(chronological.map((round, index) => [round.id, index + 1]))
+  }, [rounds])
+
   const homeView = (
     <div className="home-page">
-      <button type="button" className="home-record-button" onClick={() => setView('record')}>
-        Record New Practice
-      </button>
+      <div className="home-page__header">
+        <h2 className="home-section-title">Your Recent Practices</h2>
+        <button type="button" className="home-record-button" onClick={() => setView('record')}>
+          Record Practice
+        </button>
+      </div>
 
       {isLoadingRounds ? (
         <div className="practice-placeholder">
@@ -368,20 +388,20 @@ const App = () => {
         </div>
       ) : (
         <div className="practice-list">
-          {orderedRounds.map(round => {
+          {orderedRounds.map((round, index) => {
             const endCount = Math.max(round.ends.length, 1)
             const bestEnd = round.ends.length > 0 ? Math.max(...round.ends.map(end => end.endScore)) : 0
             const averagePerEnd = round.totalScore / endCount
+            const practiceNumber = practiceOrderMap.get(round.id) ?? orderedRounds.length - index
+            const relativeLabel = formatDate(round.createdAt)
+            const practiceLabel = relativeLabel === 'Today' ? `Practice #${practiceNumber}` : relativeLabel
 
             return (
               <article key={round.id} className="home-card">
                 <header className="home-card__header">
-                  <div className="home-card__avatar" aria-hidden="true">
-                    {userInitials}
-                  </div>
                   <div className="home-card__meta">
-                    <span className="home-card__name">{userDisplayName}</span>
-                    <span className="home-card__details">{formatDate(round.createdAt)} · {round.ends.length} ends</span>
+                    <span className="home-card__date">{formatFullDate(round.createdAt)}</span>
+                    <span className="home-card__details">{practiceLabel} · {formatTime(round.createdAt)} · {round.ends.length} ends</span>
                   </div>
                 </header>
                 <div className="home-card__metrics">
