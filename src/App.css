@@ -111,7 +111,7 @@ button {
 .home-page__header {
   display: flex;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
 }
@@ -135,7 +135,7 @@ button {
   cursor: pointer;
   transition: transform 0.15s ease, box-shadow 0.15s ease;
   width: auto;
-  margin: 0 0 0 auto;
+  margin: 0;
   white-space: nowrap;
   box-shadow: 0 16px 30px rgba(66, 62, 164, 0.35);
 }
@@ -143,6 +143,39 @@ button {
 .home-record-button:active {
   transform: scale(0.98);
   box-shadow: 0 12px 26px rgba(105, 100, 242, 0.3);
+}
+
+@media (max-width: 640px) {
+  .home-section-title {
+    font-size: 18px;
+  }
+
+  .home-record-button {
+    font-size: 16px;
+    padding: 14px 18px;
+  }
+}
+
+@media (max-width: 480px) {
+  .home-page__header {
+    flex-direction: column;
+    align-items: stretch;
+    text-align: left;
+    gap: 12px;
+  }
+
+  .home-section-title {
+    width: 100%;
+    text-align: center;
+    order: 2;
+  }
+
+  .home-record-button {
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
+    order: 1;
+  }
 }
 
 .practice-placeholder {

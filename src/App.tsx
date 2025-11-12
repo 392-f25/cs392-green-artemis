@@ -380,11 +380,12 @@ const App = () => {
       const practiceNumber = practiceOrderMap.get(round.id) ?? orderedRounds.length - index
       const relativeLabel = formatDate(round.createdAt)
       const practiceLabel = relativeLabel === 'Today' ? `Practice #${practiceNumber}` : relativeLabel
+      const endsLabel = endCount === 1 ? '1 end' : `${endCount} ends`
 
       return {
         id: round.id,
         date: formatFullDate(round.createdAt),
-        details: `${practiceLabel} · ${formatTime(round.createdAt)} · ${round.ends.length} ends`,
+        details: `${practiceLabel} · ${formatTime(round.createdAt)} · ${endsLabel}`,
         totalScore: round.totalScore,
         averagePerEnd,
         bestEnd,
