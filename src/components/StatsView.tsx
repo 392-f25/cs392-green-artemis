@@ -1,13 +1,15 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import type { AggregateStats, Round, Shot } from '../utils/types'
 import { RING_COUNT } from '../utils/constants'
 import { calculateAverage, calculateDistanceBetweenShots, calculateDistanceFromCenter, generateRingColors } from '../utils/helpers'
+import { updateRoundNotesInFirestore } from '../utils/firestore'
 
 type StatsTab = 'history' | 'aggregate'
 
 interface StatsViewProps {
   rounds: Round[]
+  userId: string
 }
 
 const formatDate = (timestamp: string): string => {
@@ -215,11 +217,85 @@ const AggregateTarget = ({ rounds }: AggregateTargetProps) => {
   )
 }
 
-export const StatsView = ({ rounds }: StatsViewProps) => {
+type SaveStatus = 'idle' | 'saving' | 'saved'
+
+export const StatsView = ({ rounds, userId }: StatsViewProps) => {
   const [activeTab, setActiveTab] = useState<StatsTab>('history')
   const [range, setRange] = useState(5)
   const [rangeInput, setRangeInput] = useState('5')
   const [expandedEnds, setExpandedEnds] = useState<Record<string, boolean>>({})
+  const [localNotes, setLocalNotes] = useState<Record<string, string>>({})
+  const [notesChanged, setNotesChanged] = useState<Record<string, boolean>>({})
+  const [saveStatus, setSaveStatus] = useState<Record<string, SaveStatus>>({})
+
+  // Initialize local notes from rounds
+  useEffect(() => {
+    const notesMap: Record<string, string> = {}
+    rounds.forEach(round => {
+      if (round.notes) {
+        notesMap[round.id] = round.notes
+      }
+    })
+    setLocalNotes(notesMap)
+  }, [rounds])
+
+  const handleNotesChange = (roundId: string, notes: string) => {
+    // Update local state immediately for responsive UI
+    setLocalNotes(prev => ({
+      ...prev,
+      [roundId]: notes,
+    }))
+
+    // Mark as changed
+    setNotesChanged(prev => ({
+      ...prev,
+      [roundId]: true,
+    }))
+
+    // Reset save status
+    setSaveStatus(prev => ({
+      ...prev,
+      [roundId]: 'idle',
+    }))
+  }
+
+  const handleSaveNotes = async (roundId: string) => {
+    const notes = localNotes[roundId] ?? ''
+    
+    setSaveStatus(prev => ({
+      ...prev,
+      [roundId]: 'saving',
+    }))
+
+    try {
+      await updateRoundNotesInFirestore(userId, roundId, notes)
+      
+      setNotesChanged(prev => ({
+        ...prev,
+        [roundId]: false,
+      }))
+
+      setSaveStatus(prev => ({
+        ...prev,
+        [roundId]: 'saved',
+      }))
+
+      // Reset to idle after 2 seconds
+      setTimeout(() => {
+        setSaveStatus(prev => ({
+          ...prev,
+          [roundId]: 'idle',
+        }))
+      }, 2000)
+    } catch (error) {
+      console.error('Failed to save notes:', error)
+      setSaveStatus(prev => ({
+        ...prev,
+        [roundId]: 'idle',
+      }))
+      alert('Failed to save notes. Please try again.')
+    }
+  }
 
   const sortedRounds = useMemo(
     () => [...rounds].sort((first, second) => new Date(second.createdAt).getTime() - new Date(first.createdAt).getTime()),
@@ -437,6 +513,29 @@ export const StatsView = ({ rounds }: StatsViewProps) => {
                     )}
                   </div>
                   <div className="practice-card__score">Total Score: {round.totalScore}</div>
+                </div>
+                <div className="practice-card__notes">
+                  <div className="practice-card__notes-header">
+                    <label htmlFor={`notes-${round.id}`} className="practice-card__notes-label">
+                      Practice Notes:
+                    </label>
+                    <button
+                      className={`practice-card__notes-save ${saveStatus[round.id] === 'saved' ? 'practice-card__notes-save--saved' : ''}`}
+                      onClick={() => handleSaveNotes(round.id)}
+                      disabled={!notesChanged[round.id] || saveStatus[round.id] === 'saving'}
+                      type="button"
+                    >
+                      {saveStatus[round.id] === 'saving' ? 'Saving...' : saveStatus[round.id] === 'saved' ? 'Saved ✓' : 'Save'}
+                    </button>
+                  </div>
+                  <textarea
+                    id={`notes-${round.id}`}
+                    className="practice-card__notes-textarea"
+                    placeholder="Add notes about this practice session..."
+                    value={localNotes[round.id] ?? ''}
+                    onChange={(e) => handleNotesChange(round.id, e.target.value)}
+                    rows={3}
+                  />
                 </div>
                 <div className="practice-card__body">
                   {round.ends.map((end, endIndex) => {

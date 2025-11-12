@@ -17,6 +17,7 @@ export type Round = {
   createdAt: string
   ends: End[]
   totalScore: number
+  notes?: string
 }
 
 export type StoredRound = {
@@ -24,6 +25,7 @@ export type StoredRound = {
   createdAt: string
   totalScore: number
   round: Record<string, Record<string, StoredShot | number>>
+  notes?: string
 }
 
 export type StoredShot = {

@@ -32,6 +32,7 @@ export const saveRoundToFirestore = async (userId: string, round: Round): Promis
       createdAt: round.createdAt,
       totalScore: round.totalScore,
       round: roundData,
+      notes: round.notes,
     }
 
     // Save the round with the round ID as the document ID
@@ -71,6 +72,7 @@ export const saveRoundsToFirestore = async (userId: string, rounds: Round[]): Pr
         createdAt: round.createdAt,
         totalScore: round.totalScore,
         round: roundData,
+        notes: round.notes,
       }
     })
 
@@ -132,12 +134,26 @@ export const loadRoundsFromFirestore = async (userId: string): Promise<Round[]> 
         createdAt: data.createdAt ?? new Date().toISOString(),
         ends,
         totalScore,
+        notes: data.notes,
       })
     })
     
     return rounds
   } catch (error) {
     console.error('Error loading rounds from Firestore:', error)
+    throw error
+  }
+}
+
+/**
+ * Update notes for a specific round in Firestore
+ */
+export const updateRoundNotesInFirestore = async (userId: string, roundId: string, notes: string): Promise<void> => {
+  try {
+    const roundRef = doc(db, 'users', userId, 'rounds', roundId)
+    await setDoc(roundRef, { notes }, { merge: true })
+  } catch (error) {
+    console.error('Error updating round notes in Firestore:', error)
     throw error
   }
 }

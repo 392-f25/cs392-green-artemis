@@ -62,6 +62,7 @@ const App = () => {
   const [rounds, setRounds] = useState<Round[]>([])
   const [user, setUser] = useState<User | null>(null)
   const [isLoadingRounds, setIsLoadingRounds] = useState(false)
+  const [practiceNotes, setPracticeNotes] = useState('')
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async current => {
@@ -110,6 +111,7 @@ const App = () => {
   const resetRoundState = () => {
     setCurrentEndIndex(0)
     setCurrentRound(Array.from({ length: endsPerRound }, generateEndTemplate))
+    setPracticeNotes('')
   }
 
   // Reset round state when entering record view
@@ -235,6 +237,7 @@ const App = () => {
       createdAt: new Date().toISOString(),
       ends: normalizedEnds,
       totalScore,
+      notes: practiceNotes || undefined,
     }
 
     // Save to Firestore first
@@ -371,6 +374,12 @@ const App = () => {
                     <span className="home-card__metric-value">{bestEnd}</span>
                   </div>
                 </div>
+                {round.notes && (
+                  <div className="home-card__notes">
+                    <span className="home-card__notes-label">Notes:</span>
+                    <p className="home-card__notes-text">{round.notes}</p>
+                  </div>
+                )}
               </article>
             )
           })}
@@ -424,6 +433,20 @@ const App = () => {
           </button>
         </div>
 
+        <div className="record-notes">
+          <label htmlFor="practice-notes" className="record-notes__label">
+            Practice Notes (Optional)
+          </label>
+          <textarea
+            id="practice-notes"
+            className="record-notes__textarea"
+            placeholder="Add notes about this practice session..."
+            value={practiceNotes}
+            onChange={(e) => setPracticeNotes(e.target.value)}
+            rows={3}
+          />
+        </div>
+
         <button className="primary-button" onClick={handleSaveRound} disabled={!isRoundComplete}>
           Save Practice
         </button>
@@ -433,7 +456,7 @@ const App = () => {
 
   const statsView = (
     <div className="stats-page">
-      <StatsView rounds={rounds} />
+      <StatsView rounds={rounds} userId={user?.uid ?? ''} />
     </div>
   )
 
