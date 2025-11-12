@@ -44,6 +44,13 @@ const ProfileIcon = () => (
   </svg>
 )
 
+const UndoIcon = () => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M3 7v6h6" />
+    <path d="M21 17a9 9 0 00-9-9 9 9 0 00-6 2.3L3 13" />
+  </svg>
+)
+
 const App = () => {
   const [view, setView] = useState<View>('home')
   const [endsPerRound, setEndsPerRound] = useState(DEFAULT_ENDS_PER_ROUND)
@@ -52,7 +59,6 @@ const App = () => {
   const [currentRound, setCurrentRound] = useState<End[]>(() =>
     Array.from({ length: DEFAULT_ENDS_PER_ROUND }, generateEndTemplate),
   )
-  const [activeShot, setActiveShot] = useState<Shot | null>(null)
   const [rounds, setRounds] = useState<Round[]>([])
   const [user, setUser] = useState<User | null>(null)
   const [isLoadingRounds, setIsLoadingRounds] = useState(false)
@@ -104,7 +110,6 @@ const App = () => {
   const resetRoundState = () => {
     setCurrentEndIndex(0)
     setCurrentRound(Array.from({ length: endsPerRound }, generateEndTemplate))
-    setActiveShot(null)
   }
 
   // Reset round state when entering record view
@@ -173,33 +178,48 @@ const App = () => {
       y: normalizedY,
       score,
     }
-    setActiveShot(shot)
+    
+    // Immediately add the shot without confirmation
+    updateEndWithShot(shot)
   }
 
-  const handleConfirmShot = () => {
-    const end = currentRound[currentEndIndex]
-    if (!activeShot || !end || end.shots.length >= SHOTS_PER_END) return
-    updateEndWithShot(activeShot)
-    setActiveShot(null)
+  const handleUndoShot = () => {
+    const currentEnd = currentRound[currentEndIndex]
+    if (!currentEnd || currentEnd.shots.length === 0) return
+    
+    setCurrentRound(prev => {
+      const updated = [...prev]
+      const end = updated[currentEndIndex]
+      if (!end) return prev
 
-    // Automatically move to next end if current end will be complete after this shot
-    if (end.shots.length + 1 === SHOTS_PER_END) {
-      // Use setTimeout to allow state to update first
-      setTimeout(() => {
-        const nextIncompleteIndex = currentRound.findIndex((e, index) => index > currentEndIndex && e.shots.length < SHOTS_PER_END)
-        if (nextIncompleteIndex !== -1) {
-          setCurrentEndIndex(nextIncompleteIndex)
-        } else if (currentEndIndex < endsPerRound - 1) {
-          setCurrentEndIndex(currentEndIndex + 1)
-        }
-      }, 300) // Small delay for better UX
+      const shots = end.shots.slice(0, -1) // Remove last shot
+      const endScore = shots.reduce((total, s) => total + s.score, 0)
+      const precision = calculateEndPrecision(shots)
+      updated[currentEndIndex] = { shots, endScore, precision }
+      return updated
+    })
+  }
+
+  const handleConfirmEnd = () => {
+    const end = currentRound[currentEndIndex]
+    if (!end || end.shots.length !== SHOTS_PER_END) return
+
+    // Move to next incomplete end or next end
+    const nextIncompleteIndex = currentRound.findIndex((e, index) => index > currentEndIndex && e.shots.length < SHOTS_PER_END)
+    if (nextIncompleteIndex !== -1) {
+      setCurrentEndIndex(nextIncompleteIndex)
+    } else if (currentEndIndex < endsPerRound - 1) {
+      setCurrentEndIndex(currentEndIndex + 1)
     }
   }
 
   const currentEnd = currentRound[currentEndIndex]
   const shotsInCurrentEnd = currentEnd?.shots ?? []
 
-  const canConfirmShot = Boolean(activeShot) && shotsInCurrentEnd.length < SHOTS_PER_END
+  const isEndComplete = shotsInCurrentEnd.length === SHOTS_PER_END
+  const isLastEnd = currentEndIndex === endsPerRound - 1
+  const canConfirmEnd = isEndComplete && !isLastEnd
+  const canUndoShot = shotsInCurrentEnd.length > 0
   const isRoundComplete = currentRound.length === endsPerRound && currentRound.every(end => end.shots.length === SHOTS_PER_END)
 
   const handleSaveRound = async () => {
@@ -229,15 +249,6 @@ const App = () => {
       console.error('Failed to save round:', error)
       alert('Failed to save your practice session. Please try again.')
     }
-  }
-
-  const handleResetEnd = () => {
-    setCurrentRound(prev => {
-      const updated = [...prev]
-      updated[currentEndIndex] = generateEndTemplate()
-      return updated
-    })
-    setActiveShot(null)
   }
 
   const formatDate = (isoString: string) => {
@@ -379,13 +390,23 @@ const App = () => {
           onBlur={handleEndsPerRoundInputBlur}
         />
 
-        <p className="record-instructions">Tap target to place shot. Confirm to lock it in.</p>
+        <button 
+          className="undo-button" 
+          onClick={handleUndoShot} 
+          disabled={!canUndoShot}
+          aria-label="Undo last shot"
+        >
+          <UndoIcon />
+          <span>Undo Shot</span>
+        </button>
+
+        <p className="record-instructions">Tap target to place shot.</p>
 
         <Target
           ringColors={ringColors}
           currentRound={currentRound}
           currentEndIndex={currentEndIndex}
-          activeShot={activeShot}
+          activeShot={null}
           onTargetClick={handleTargetClick}
           ringCount={RING_COUNT}
         />
@@ -398,19 +419,13 @@ const App = () => {
         <EndSummary currentRound={currentRound} currentEndIndex={currentEndIndex} onEndClick={setCurrentEndIndex} />
 
         <div className="record-panel__actions">
-          <button className="primary-button" onClick={handleConfirmShot} disabled={!canConfirmShot}>
-            Confirm Shot
-          </button>
-          <button className="secondary-button" onClick={handleResetEnd}>
-            Reset End
-          </button>
-          <button className="secondary-button" onClick={() => setView('home')}>
-            Cancel Round
+          <button className="primary-button" onClick={handleConfirmEnd} disabled={!canConfirmEnd}>
+            Next End
           </button>
         </div>
 
         <button className="primary-button" onClick={handleSaveRound} disabled={!isRoundComplete}>
-          Save Round
+          Save Practice
         </button>
       </div>
     </div>
