@@ -1032,9 +1032,54 @@ button {
   max-width: 640px;
 }
 
+.stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .stats-tabs {
   display: flex;
   gap: 8px;
+}
+
+.stats-export-button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(79, 70, 229, 0.2);
+  border: 1px solid rgba(129, 140, 248, 0.3);
+  color: #cbd5f5;
+  padding: 8px 14px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.stats-export-button svg {
+  flex-shrink: 0;
+}
+
+.stats-export-button:hover:not(:disabled) {
+  background: rgba(79, 70, 229, 0.3);
+  border-color: rgba(129, 140, 248, 0.5);
+  color: #e2e8f0;
+  transform: translateY(-1px);
+}
+
+.stats-export-button:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.stats-export-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
 }
 
 .stats-tab {

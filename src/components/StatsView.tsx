@@ -25,6 +25,66 @@ const formatDate = (timestamp: string): string => {
 
 const formatUnits = (value: number, fractionDigits = 1): string => value.toFixed(fractionDigits)
 
+const exportToCSV = (rounds: Round[]) => {
+  // Sort rounds by date (newest first)
+  const sortedRounds = [...rounds].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+
+  // Create CSV header
+  const headers = [
+    'Practice Number',
+    'Date',
+    'Total Score',
+    'Number of Ends',
+    'Average Score per End',
+    'Best End',
+    'Average Precision',
+    'Notes'
+  ]
+
+  // Create CSV rows
+  const rows = sortedRounds.map((round, index) => {
+    const practiceNumber = sortedRounds.length - index
+    const date = formatDate(round.createdAt)
+    const totalScore = round.totalScore
+    const numEnds = round.ends.length
+    const avgPerEnd = (totalScore / numEnds).toFixed(2)
+    const bestEnd = round.ends.length > 0 ? Math.max(...round.ends.map(end => end.endScore)) : 0
+    const precisions = round.ends.map(end => end.precision).filter(p => p > 0)
+    const avgPrecision = precisions.length > 0 ? calculateAverage(precisions).toFixed(2) : 'N/A'
+    const notes = round.notes ? `"${round.notes.replace(/"/g, '""')}"` : ''
+
+    return [
+      practiceNumber,
+      `"${date}"`,
+      totalScore,
+      numEnds,
+      avgPerEnd,
+      bestEnd,
+      avgPrecision,
+      notes
+    ].join(',')
+  })
+
+  // Combine headers and rows
+  const csv = [headers.join(','), ...rows].join('\n')
+
+  // Create blob and download
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  
+  link.setAttribute('href', url)
+  link.setAttribute('download', `artemis-practice-stats-${new Date().toISOString().split('T')[0]}.csv`)
+  link.style.visibility = 'hidden'
+  
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+  URL.revokeObjectURL(url)
+}
+
 const computeAggregateStats = (rounds: Round[]): AggregateStats => {
   const shots = rounds.flatMap(round => round.ends.flatMap(end => end.shots))
 
@@ -369,20 +429,36 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
 
   return (
     <div className="stats-container">
-      <div className="stats-tabs">
+      <div className="stats-header">
+        <div className="stats-tabs">
+          <button
+            className={`stats-tab ${activeTab === 'history' ? 'stats-tab--active' : ''}`}
+            onClick={() => handleTabChange('history')}
+            type="button"
+          >
+            Practice History
+          </button>
+          <button
+            className={`stats-tab ${activeTab === 'aggregate' ? 'stats-tab--active' : ''}`}
+            onClick={() => handleTabChange('aggregate')}
+            type="button"
+          >
+            Aggregate Stats
+          </button>
+        </div>
         <button
-          className={`stats-tab ${activeTab === 'history' ? 'stats-tab--active' : ''}`}
-          onClick={() => handleTabChange('history')}
+          className="stats-export-button"
+          onClick={() => exportToCSV(rounds)}
           type="button"
+          disabled={rounds.length === 0}
+          aria-label="Export statistics to CSV"
         >
-          Practice History
-        </button>
-        <button
-          className={`stats-tab ${activeTab === 'aggregate' ? 'stats-tab--active' : ''}`}
-          onClick={() => handleTabChange('aggregate')}
-          type="button"
-        >
-          Aggregate Stats
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+            <polyline points="7 10 12 15 17 10" />
+            <line x1="12" y1="15" x2="12" y2="3" />
+          </svg>
+          Export CSV
         </button>
       </div>
 
