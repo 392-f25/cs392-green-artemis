@@ -10,7 +10,7 @@ import { EndsPerRoundSelector } from './components/EndsPerRoundSelector'
 import { StatsView } from './components/StatsView'
 import { auth, googleProvider } from './firebase'
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
-import { saveRoundToFirestore, loadRoundsFromFirestore } from './utils/firestore'
+import { saveRoundToFirestore, loadRoundsFromFirestore, deleteRoundFromFirestore } from './utils/firestore'
 
 const HomeIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -131,7 +131,7 @@ const App = () => {
         })
         return newRound
       })
-      
+
       // Adjust currentEndIndex if it's now out of bounds
       setCurrentEndIndex(prevIndex => Math.min(prevIndex, endsPerRound - 1))
     }
@@ -162,17 +162,17 @@ const App = () => {
     const centerY = rect.top + rect.height / 2
     const clickX = event.clientX - centerX
     const clickY = event.clientY - centerY
-    
+
     // Use wrapper size for radius calculation
     // Since target is 70% of wrapper, we need to adjust normalization
     const wrapperRadius = rect.width / 2
     const targetRadius = wrapperRadius * 0.7 // target is 70% of wrapper
-    
+
     // Normalize to target size (values > 1 or < -1 are outside target)
     const normalizedX = clickX / targetRadius
     const normalizedY = clickY / targetRadius
     const distance = Math.sqrt(normalizedX ** 2 + normalizedY ** 2)
-    
+
     // Allow shots outside the target, but they score 0
     const score = distance > 1 ? 0 : calculateScore(normalizedX, normalizedY)
     const shot: Shot = {
@@ -180,7 +180,7 @@ const App = () => {
       y: normalizedY,
       score,
     }
-    
+
     // Immediately add the shot without confirmation
     updateEndWithShot(shot)
   }
@@ -188,7 +188,7 @@ const App = () => {
   const handleUndoShot = () => {
     const currentEnd = currentRound[currentEndIndex]
     if (!currentEnd || currentEnd.shots.length === 0) return
-    
+
     setCurrentRound(prev => {
       const updated = [...prev]
       const end = updated[currentEndIndex]
@@ -224,6 +224,16 @@ const App = () => {
   const canUndoShot = shotsInCurrentEnd.length > 0
   const isRoundComplete = currentRound.length === endsPerRound && currentRound.every(end => end.shots.length === SHOTS_PER_END)
 
+  const primaryActionLabel = isRoundComplete ? 'Save Practice' : 'Next End'
+  const primaryActionDisabled = isRoundComplete ? false : !canConfirmEnd
+  const handlePrimaryActionClick = () => {
+    if (isRoundComplete) {
+      void handleSaveRound()
+      return
+    }
+    handleConfirmEnd()
+  }
+
   const handleSaveRound = async () => {
     if (!isRoundComplete || !user) return
     const normalizedEnds = currentRound.map(end => ({
@@ -251,6 +261,20 @@ const App = () => {
     } catch (error) {
       console.error('Failed to save round:', error)
       alert('Failed to save your practice session. Please try again.')
+    }
+  }
+
+  const handleDeleteRound = async (roundId: string) => {
+    if (!user) {
+      throw new Error('User not authenticated')
+    }
+
+    try {
+      await deleteRoundFromFirestore(user.uid, roundId)
+      setRounds(prev => prev.filter(round => round.id !== roundId))
+    } catch (error) {
+      console.error('Failed to delete round:', error)
+      throw error instanceof Error ? error : new Error('Failed to delete round')
     }
   }
 
@@ -399,9 +423,9 @@ const App = () => {
           onBlur={handleEndsPerRoundInputBlur}
         />
 
-        <button 
-          className="undo-button" 
-          onClick={handleUndoShot} 
+        <button
+          className="undo-button"
+          onClick={handleUndoShot}
           disabled={!canUndoShot}
           aria-label="Undo last shot"
         >
@@ -428,8 +452,8 @@ const App = () => {
         <EndSummary currentRound={currentRound} currentEndIndex={currentEndIndex} onEndClick={setCurrentEndIndex} />
 
         <div className="record-panel__actions">
-          <button className="primary-button" onClick={handleConfirmEnd} disabled={!canConfirmEnd}>
-            Next End
+          <button className="primary-button" onClick={handlePrimaryActionClick} disabled={primaryActionDisabled}>
+            {primaryActionLabel}
           </button>
         </div>
 
@@ -447,16 +471,13 @@ const App = () => {
           />
         </div>
 
-        <button className="primary-button" onClick={handleSaveRound} disabled={!isRoundComplete}>
-          Save Practice
-        </button>
       </div>
     </div>
   )
 
   const statsView = (
     <div className="stats-page">
-      <StatsView rounds={rounds} userId={user?.uid ?? ''} />
+      <StatsView rounds={rounds} userId={user?.uid ?? ''} onDeleteRound={handleDeleteRound} />
     </div>
   )
 
@@ -495,7 +516,7 @@ const App = () => {
           <h1 className="sign-in-title">Artemis</h1>
           <div className="sign-in-underline" aria-hidden="true" />
         </div>
-        <p className="sign-in-subtitle">Track & Share Your Archery Progress</p>
+        <p className="sign-in-subtitle"> Your Archery Progress Made Visible </p>
         <button className="sign-in-button" onClick={handleSignIn}>
           Sign in With Google
         </button>

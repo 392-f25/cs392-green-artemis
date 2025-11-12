@@ -10,6 +10,7 @@ type StatsTab = 'history' | 'aggregate'
 interface StatsViewProps {
   rounds: Round[]
   userId: string
+  onDeleteRound: (roundId: string) => Promise<void>
 }
 
 const formatDate = (timestamp: string): string => {
@@ -74,11 +75,11 @@ const exportToCSV = (rounds: Round[]) => {
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' })
   const link = document.createElement('a')
   const url = URL.createObjectURL(blob)
-  
+
   link.setAttribute('href', url)
   link.setAttribute('download', `artemis-practice-stats-${new Date().toISOString().split('T')[0]}.csv`)
   link.style.visibility = 'hidden'
-  
+
   document.body.appendChild(link)
   link.click()
   document.body.removeChild(link)
@@ -94,8 +95,8 @@ const computeAggregateStats = (rounds: Round[]): AggregateStats => {
   // Count missed shots (score = 0)
   const missedShots = shots.filter(shot => shot.score === 0).length
 
-    // Calculate average precision (calculated as mean radius - average distance from group center)
-  const endPrecisions = rounds.flatMap(round => 
+  // Calculate average precision (calculated as mean radius - average distance from group center)
+  const endPrecisions = rounds.flatMap(round =>
     round.ends.map(end => end.precision).filter(p => p > 0)
   )
   const averagePrecision = calculateAverage(endPrecisions)
@@ -319,15 +320,19 @@ const AggregateTarget = ({ rounds }: AggregateTargetProps) => {
 
 type SaveStatus = 'idle' | 'saving' | 'saved'
 
-export const StatsView = ({ rounds, userId }: StatsViewProps) => {
+export const StatsView = ({ rounds, userId, onDeleteRound }: StatsViewProps) => {
   const [activeTab, setActiveTab] = useState<StatsTab>('history')
   const [range, setRange] = useState(5)
   const [rangeInput, setRangeInput] = useState('5')
   const [expandedEnds, setExpandedEnds] = useState<Record<string, boolean>>({})
+  const [expandedPractices, setExpandedPractices] = useState<Record<string, boolean>>({})
   const [localNotes, setLocalNotes] = useState<Record<string, string>>({})
   const [notesChanged, setNotesChanged] = useState<Record<string, boolean>>({})
   const [saveStatus, setSaveStatus] = useState<Record<string, SaveStatus>>({})
   const [showMetricsInfo, setShowMetricsInfo] = useState(false)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState<string | null>(null)
 
   // Initialize local notes from rounds
   useEffect(() => {
@@ -362,7 +367,7 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
 
   const handleSaveNotes = async (roundId: string) => {
     const notes = localNotes[roundId] ?? ''
-    
+
     setSaveStatus(prev => ({
       ...prev,
       [roundId]: 'saving',
@@ -370,7 +375,7 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
 
     try {
       await updateRoundNotesInFirestore(userId, roundId, notes)
-      
+
       setNotesChanged(prev => ({
         ...prev,
         [roundId]: false,
@@ -411,6 +416,13 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
     }))
   }
 
+  const togglePracticeExpansion = (roundId: string) => {
+    setExpandedPractices(prev => ({
+      ...prev,
+      [roundId]: !prev[roundId],
+    }))
+  }
+
   const effectiveRange = Math.max(1, Math.min(range, sortedRounds.length || 1))
 
   const selectedRounds = useMemo(
@@ -420,6 +432,29 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
 
   const aggregateStats = useMemo(() => computeAggregateStats(selectedRounds), [selectedRounds])
   const chartData = useMemo(() => prepareChartData(sortedRounds).reverse(), [sortedRounds])
+
+  useEffect(() => {
+    setExpandedEnds(prev => {
+      const nextState: Record<string, boolean> = {}
+      selectedRounds.forEach(round => {
+        round.ends.forEach((_, endIndex) => {
+          const key = `${round.id}-${endIndex}`
+          nextState[key] = prev[key] ?? false
+        })
+      })
+      return nextState
+    })
+  }, [selectedRounds])
+
+  useEffect(() => {
+    setExpandedPractices(prev => {
+      const nextState: Record<string, boolean> = {}
+      selectedRounds.forEach(round => {
+        nextState[round.id] = prev[round.id] ?? false
+      })
+      return nextState
+    })
+  }, [selectedRounds])
 
   const handleTabChange = (tab: StatsTab) => {
     setActiveTab(tab)
@@ -460,6 +495,56 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
     setRangeInput(String(clamped))
   }
 
+  const pendingDeleteRound = useMemo(
+    () => (pendingDeleteId ? sortedRounds.find(round => round.id === pendingDeleteId) ?? null : null),
+    [pendingDeleteId, sortedRounds],
+  )
+
+  const pendingPracticeNumber = useMemo(() => {
+    if (!pendingDeleteRound) {
+      return null
+    }
+    const index = sortedRounds.findIndex(round => round.id === pendingDeleteRound.id)
+    if (index === -1) {
+      return null
+    }
+    return sortedRounds.length - index
+  }, [pendingDeleteRound, sortedRounds])
+
+  const deleteModalTitleId = 'delete-practice-title'
+  const deleteModalDescriptionId = 'delete-practice-description'
+
+  const handleRequestDelete = (roundId: string) => {
+    if (isDeleting) return
+    setPendingDeleteId(roundId)
+    setDeleteError(null)
+  }
+
+  const handleCancelDelete = () => {
+    if (isDeleting) return
+    setPendingDeleteId(null)
+    setDeleteError(null)
+  }
+
+  const handleConfirmDelete = async () => {
+    if (!pendingDeleteId) {
+      return
+    }
+
+    setIsDeleting(true)
+    setDeleteError(null)
+
+    try {
+      await onDeleteRound(pendingDeleteId)
+      setPendingDeleteId(null)
+    } catch (error) {
+      console.error('Failed to delete practice:', error)
+      setDeleteError('Failed to delete this practice. Please try again.')
+    } finally {
+      setIsDeleting(false)
+    }
+  }
+
   if (rounds.length === 0) {
     return (
       <div className="stats-container">
@@ -487,39 +572,24 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
             Aggregate Stats
           </button>
         </div>
-        <button
-          className="stats-export-button"
-          onClick={() => exportToCSV(rounds)}
-          type="button"
-          disabled={rounds.length === 0}
-          aria-label="Export statistics to CSV"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-            <polyline points="7 10 12 15 17 10" />
-            <line x1="12" y1="15" x2="12" y2="3" />
-          </svg>
-          Export CSV
-        </button>
       </div>
 
       {activeTab === 'aggregate' ? (
         <div className="stats-aggregate">
           <div className="stats-aggregate__controls">
-            <label className="stats-aggregate__label" htmlFor="aggregate-range">
-              Practices to include
+            <label className="stats-aggregate__selector ends-selector" htmlFor="aggregate-range">
+              <span className="ends-selector__label">Practices to Analyze</span>
+              <input
+                id="aggregate-range"
+                className="number-input ends-selector__input"
+                type="number"
+                min={1}
+                value={rangeInput}
+                onChange={event => handleRangeInputChange(event.target.value)}
+                onBlur={handleRangeInputBlur}
+                aria-label="Number of recent practices to analyze in aggregate statistics"
+              />
             </label>
-            <input
-              id="aggregate-range"
-              className="number-input"
-              type="number"
-              min={1}
-              value={rangeInput}
-              onChange={event => handleRangeInputChange(event.target.value)}
-              onBlur={handleRangeInputBlur}
-              aria-label="Number of recent practices to include in aggregate statistics"
-            />
-            <span className="stats-aggregate__hint">Analyzing last {effectiveRange} practice{effectiveRange === 1 ? '' : 's'}.</span>
           </div>
 
           <AggregateTarget rounds={selectedRounds} />
@@ -626,10 +696,10 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
                   dot={{ fill: '#10b981', r: 4 }}
                   activeDot={{ r: 6 }}
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="avgPrecision" 
-                  stroke="#a78bfa" 
+                <Line
+                  type="monotone"
+                  dataKey="avgPrecision"
+                  stroke="#a78bfa"
                   strokeWidth={2}
                   name="Grouping Score"
                   dot={{ fill: '#a78bfa', r: 4 }}
@@ -637,14 +707,35 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
                 />
               </LineChart>
             </ResponsiveContainer>
+            <div className="stats-chart__actions">
+              <button
+                className="stats-export-button"
+                onClick={() => exportToCSV(rounds)}
+                type="button"
+                disabled={rounds.length === 0}
+                aria-label="Export statistics to CSV"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Export CSV
+              </button>
+            </div>
           </div>
 
           {selectedRounds.map((round, roundIndex) => {
             const roundPrecisions = round.ends.map(end => end.precision).filter(p => p > 0)
             const avgRoundPrecision = calculateAverage(roundPrecisions)
+            const isPracticeExpanded = expandedPractices[round.id] ?? false
+            const detailsId = `practice-details-${round.id}`
 
             return (
-              <div key={round.id} className="practice-card">
+              <div
+                key={round.id}
+                className={`practice-card ${isPracticeExpanded ? 'practice-card--expanded' : ''}`}
+              >
                 <div className="practice-card__header">
                   <div>
                     <p className="practice-card__title">Practice #{sortedRounds.length - roundIndex}</p>
@@ -655,103 +746,198 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
                       </p>
                     )}
                   </div>
-                  <div className="practice-card__score">Total Score: {round.totalScore}</div>
-                </div>
-                <div className="practice-card__notes">
-                  <div className="practice-card__notes-header">
-                    <label htmlFor={`notes-${round.id}`} className="practice-card__notes-label">
-                      Practice Notes:
-                    </label>
-                    <button
-                      className={`practice-card__notes-save ${saveStatus[round.id] === 'saved' ? 'practice-card__notes-save--saved' : ''}`}
-                      onClick={() => handleSaveNotes(round.id)}
-                      disabled={!notesChanged[round.id] || saveStatus[round.id] === 'saving'}
-                      type="button"
-                    >
-                      {saveStatus[round.id] === 'saving' ? 'Saving...' : saveStatus[round.id] === 'saved' ? 'Saved ✓' : 'Save'}
-                    </button>
-                  </div>
-                  <textarea
-                    id={`notes-${round.id}`}
-                    className="practice-card__notes-textarea"
-                    placeholder="Add notes about this practice session..."
-                    value={localNotes[round.id] ?? ''}
-                    onChange={(e) => handleNotesChange(round.id, e.target.value)}
-                    rows={3}
-                  />
-                </div>
-                <div className="practice-card__body">
-                  {round.ends.map((end, endIndex) => {
-                    const endKey = `${round.id}-${endIndex}`
-                    const isExpanded = expandedEnds[endKey] || false
-                    return (
-                      <div key={`${round.id}-end-${endIndex}`} className="practice-card__end">
-                        <div
-                          className="practice-card__end-header practice-card__end-header--clickable"
-                          onClick={() => toggleEndExpansion(round.id, endIndex)}
-                          role="button"
-                          tabIndex={0}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') {
-                              e.preventDefault()
-                              toggleEndExpansion(round.id, endIndex)
-                            }
-                          }}
+                  <div className="practice-card__header-actions">
+                    <div className="practice-card__score">Total Score: {round.totalScore}</div>
+                    <div className="practice-card__header-buttons">
+                      <button
+                        type="button"
+                        className="practice-card__toggle"
+                        onClick={() => togglePracticeExpansion(round.id)}
+                        aria-expanded={isPracticeExpanded}
+                        aria-controls={detailsId}
+                      >
+                        <span>{isPracticeExpanded ? 'Hide details' : 'Show details'}</span>
+                        <svg
+                          className={`practice-card__toggle-icon ${isPracticeExpanded ? 'practice-card__toggle-icon--expanded' : ''}`}
+                          viewBox="0 0 20 20"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                          width="16"
+                          height="16"
                         >
-                          <div className="practice-card__end-header-left">
-                            <span className="practice-card__end-label">End {endIndex + 1}</span>
-                            <span className="practice-card__end-score">{end.endScore} pts</span>
-                          </div>
-                          <svg
-                            className={`practice-card__dropdown-icon ${isExpanded ? 'practice-card__dropdown-icon--expanded' : ''}`}
-                            width="20"
-                            height="20"
-                            viewBox="0 0 20 20"
-                            fill="none"
-                            xmlns="http://www.w3.org/2000/svg"
-                          >
-                            <path
-                              d="M5 7.5L10 12.5L15 7.5"
-                              stroke="currentColor"
-                              strokeWidth="2"
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                            />
-                          </svg>
-                        </div>
-                        <div className="practice-card__end-target">
-                          <MiniTarget shots={end.shots} />
-                        </div>
-                        {isExpanded && (
-                          <div className="practice-card__end-details">
-                            <div className="practice-card__end-precision">
-                              <span className="practice-card__precision-label">End Precision:</span>
-                              <span className="practice-card__precision-value">
-                                {end.precision > 0 ? formatUnits(end.precision) : 'N/A'}
-                              </span>
-                              <span className="practice-card__precision-sublabel">avg units from group center</span>
-                            </div>
-                            <ul className="practice-card__shots">
-                              {end.shots.map((shot, shotIndex) => {
-                                const distanceFromCenter = calculateDistanceFromCenter(shot)
-                                return (
-                                  <li key={`${round.id}-end-${endIndex}-shot-${shotIndex}`} className="practice-card__shot">
-                                    <span className="practice-card__shot-label">Shot {shotIndex + 1}</span>
-                                    <span className="practice-card__shot-metric">{shot.score} pts</span>
-                                    <span className="practice-card__shot-metric">dist: {formatUnits(distanceFromCenter)}</span>
-                                  </li>
-                                )
-                              })}
-                            </ul>
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
+                          <path d="M5 8l5 5 5-5" />
+                        </svg>
+                      </button>
+                      <button
+                        type="button"
+                        className="practice-card__delete"
+                        onClick={() => handleRequestDelete(round.id)}
+                        aria-label="Delete practice"
+                        disabled={isDeleting && pendingDeleteId === round.id}
+                      >
+                        <svg
+                          className="practice-card__delete-icon"
+                          viewBox="0 0 24 24"
+                          width="16"
+                          height="16"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          aria-hidden="true"
+                        >
+                          <polyline points="3 6 5 6 21 6" />
+                          <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+                          <path d="M10 11v6" />
+                          <path d="M14 11v6" />
+                          <path d="M9 6V4a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
                 </div>
+
+                {isPracticeExpanded && (
+                  <div id={detailsId} className="practice-card__content">
+                    <div className="practice-card__notes">
+                      <div className="practice-card__notes-header">
+                        <label htmlFor={`notes-${round.id}`} className="practice-card__notes-label">
+                          Practice Notes:
+                        </label>
+                        <button
+                          className={`practice-card__notes-save ${saveStatus[round.id] === 'saved' ? 'practice-card__notes-save--saved' : ''}`}
+                          onClick={() => handleSaveNotes(round.id)}
+                          disabled={!notesChanged[round.id] || saveStatus[round.id] === 'saving'}
+                          type="button"
+                        >
+                          {saveStatus[round.id] === 'saving' ? 'Saving...' : saveStatus[round.id] === 'saved' ? 'Saved ✓' : 'Save'}
+                        </button>
+                      </div>
+                      <textarea
+                        id={`notes-${round.id}`}
+                        className="practice-card__notes-textarea"
+                        placeholder="Add notes about this practice session..."
+                        value={localNotes[round.id] ?? ''}
+                        onChange={(e) => handleNotesChange(round.id, e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="practice-card__body">
+                      {round.ends.map((end, endIndex) => {
+                        const endKey = `${round.id}-${endIndex}`
+                        const isEndExpanded = expandedEnds[endKey] || false
+                        return (
+                          <div key={`${round.id}-end-${endIndex}`} className="practice-card__end">
+                            <div
+                              className="practice-card__end-header practice-card__end-header--clickable"
+                              onClick={() => toggleEndExpansion(round.id, endIndex)}
+                              role="button"
+                              tabIndex={0}
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault()
+                                  toggleEndExpansion(round.id, endIndex)
+                                }
+                              }}
+                            >
+                              <div className="practice-card__end-header-left">
+                                <span className="practice-card__end-label">End {endIndex + 1}</span>
+                                <span className="practice-card__end-score">{end.endScore} pts</span>
+                              </div>
+                              <svg
+                                className={`practice-card__dropdown-icon ${isEndExpanded ? 'practice-card__dropdown-icon--expanded' : ''}`}
+                                width="20"
+                                height="20"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg"
+                              >
+                                <path
+                                  d="M5 7.5L10 12.5L15 7.5"
+                                  stroke="currentColor"
+                                  strokeWidth="2"
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                />
+                              </svg>
+                            </div>
+                            <div className="practice-card__end-target">
+                              <MiniTarget shots={end.shots} />
+                            </div>
+                            {isEndExpanded && (
+                              <div className="practice-card__end-details">
+                                <div className="practice-card__end-precision">
+                                  <span className="practice-card__precision-label">End Precision:</span>
+                                  <span className="practice-card__precision-value">
+                                    {end.precision > 0 ? formatUnits(end.precision) : 'N/A'}
+                                  </span>
+                                  <span className="practice-card__precision-sublabel">avg units from group center</span>
+                                </div>
+                                <ul className="practice-card__shots">
+                                  {end.shots.map((shot, shotIndex) => {
+                                    const distanceFromCenter = calculateDistanceFromCenter(shot)
+                                    return (
+                                      <li key={`${round.id}-end-${endIndex}-shot-${shotIndex}`} className="practice-card__shot">
+                                        <span className="practice-card__shot-label">Shot {shotIndex + 1}</span>
+                                        <span className="practice-card__shot-metric">{shot.score} pts</span>
+                                        <span className="practice-card__shot-metric">dist: {formatUnits(distanceFromCenter)}</span>
+                                      </li>
+                                    )
+                                  })}
+                                </ul>
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             )
           })}
+        </div>
+      )}
+      {pendingDeleteRound && (
+        <div
+          className="modal-overlay"
+          role="alertdialog"
+          aria-modal="true"
+          aria-labelledby={deleteModalTitleId}
+          aria-describedby={deleteModalDescriptionId}
+        >
+          <div className="modal">
+            <h3 id={deleteModalTitleId} className="modal__title">Delete Practice?</h3>
+            <p id={deleteModalDescriptionId} className="modal__description">
+              This will permanently remove{' '}
+              {pendingPracticeNumber ? `Practice #${pendingPracticeNumber}` : 'this practice'}
+              {pendingDeleteRound ? ` recorded on ${formatDate(pendingDeleteRound.createdAt)}` : ''}.
+            </p>
+            {deleteError ? <p className="modal__error">{deleteError}</p> : null}
+            <div className="modal__actions">
+              <button
+                type="button"
+                className="modal__button modal__button--secondary"
+                onClick={handleCancelDelete}
+                disabled={isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="modal__button modal__button--destructive"
+                onClick={handleConfirmDelete}
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
