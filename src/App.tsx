@@ -28,7 +28,7 @@ const App = () => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async current => {
       setUser(current)
-      
+
       // Load rounds from Firestore when user signs in
       if (current) {
         setIsLoadingRounds(true)
@@ -125,7 +125,7 @@ const App = () => {
     if (!activeShot || !end || end.shots.length >= SHOTS_PER_END) return
     updateEndWithShot(activeShot)
     setActiveShot(null)
-    
+
     // Automatically move to next end if current end will be complete after this shot
     if (end.shots.length + 1 === SHOTS_PER_END) {
       // Use setTimeout to allow state to update first
@@ -161,7 +161,7 @@ const App = () => {
       ends: normalizedEnds,
       totalScore,
     }
-    
+
     // Save to Firestore first
     try {
       await saveRoundToFirestore(user.uid, round)
@@ -188,11 +188,11 @@ const App = () => {
     const now = new Date()
     const diffMs = now.getTime() - date.getTime()
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
-    
+
     if (diffDays === 0) return 'Today'
     if (diffDays === 1) return 'Yesterday'
     if (diffDays < 7) return `${diffDays} days ago`
-    
+
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
   }
 
@@ -413,10 +413,23 @@ const App = () => {
   }
 
   const signInView = (
-    <div className="flex items-center justify-center w-full h-full">
-      <button className="primary-button" onClick={handleSignIn}>Sign in with Google</button>
+    <div className="sign-in-shell">
+      <div className="sign-in-content">
+        <div>
+          <h1 className="sign-in-title">Artemis</h1>
+          <div className="sign-in-underline" aria-hidden="true" />
+        </div>
+        <p className="sign-in-subtitle">Track & Share Your Archery Progress</p>
+        <button className="sign-in-button" onClick={handleSignIn}>
+          Sign in With Google
+        </button>
+      </div>
     </div>
   )
+
+  if (!user) {
+    return signInView
+  }
 
   return (
     <div className="app-shell">
@@ -429,26 +442,22 @@ const App = () => {
           <div className="header-spacer" />
         )}
         <h1 className="app-title">Artemis Tracker</h1>
-        {user ? (
-          <div className="flex items-center gap-2">
-            {user.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt={user.displayName ?? 'User'}
-                className="h-8 w-8 rounded-full"
-                referrerPolicy="no-referrer"
-              />
-            ) : null}
-            <button className="secondary-button" onClick={handleSignOut}>Sign out</button>
-          </div>
-        ) : (
-          <div className="header-spacer" />
-        )}
+        <div className="flex items-center gap-2">
+          {user.photoURL ? (
+            <img
+              src={user.photoURL}
+              alt={user.displayName ?? 'User'}
+              className="h-8 w-8 rounded-full"
+              referrerPolicy="no-referrer"
+            />
+          ) : null}
+          <button className="secondary-button" onClick={handleSignOut}>Sign out</button>
+        </div>
       </header>
       <main className="app-main">
-        {user ? renderView() : signInView}
+        {renderView()}
       </main>
-      {user && view === 'new-practice' && (
+      {view === 'new-practice' && (
         <footer className="app-footer text-slate-300 text-xs text-center">
           Tap target to place shot. Confirm to lock it in.
         </footer>
