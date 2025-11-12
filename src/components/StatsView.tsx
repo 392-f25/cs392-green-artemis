@@ -42,8 +42,8 @@ const computeAggregateStats = (rounds: Round[]): AggregateStats => {
 
   const averageDistanceBetweenShots = calculateAverage(distancesBetweenShots)
 
-  // Calculate average precision (average of each end's precision)
-  const endPrecisions = rounds.flatMap(round =>
+    // Calculate average precision (calculated as mean radius - average distance from group center)
+  const endPrecisions = rounds.flatMap(round => 
     round.ends.map(end => end.precision).filter(p => p > 0)
   )
   const averagePrecision = calculateAverage(endPrecisions)
@@ -407,12 +407,12 @@ export const StatsView = ({ rounds }: StatsViewProps) => {
                   dot={{ fill: '#10b981', r: 4 }}
                   activeDot={{ r: 6 }}
                 />
-                <Line
-                  type="monotone"
-                  dataKey="avgPrecision"
-                  stroke="#a78bfa"
+                <Line 
+                  type="monotone" 
+                  dataKey="avgPrecision" 
+                  stroke="#a78bfa" 
                   strokeWidth={2}
-                  name="Average Precision"
+                  name="Precision"
                   dot={{ fill: '#a78bfa', r: 4 }}
                   activeDot={{ r: 6 }}
                 />
@@ -487,7 +487,7 @@ export const StatsView = ({ rounds }: StatsViewProps) => {
                               <span className="practice-card__precision-value">
                                 {end.precision > 0 ? formatUnits(end.precision) : 'N/A'}
                               </span>
-                              <span className="practice-card__precision-sublabel">avg units between shots</span>
+                              <span className="practice-card__precision-sublabel">avg units from group center</span>
                             </div>
                             <ul className="practice-card__shots">
                               {end.shots.map((shot, shotIndex) => {
