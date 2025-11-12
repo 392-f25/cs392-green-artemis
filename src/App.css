@@ -850,14 +850,15 @@ button {
 }
 
 .shot-dot--current {
-  background: #0f766e;
-  border: 2px solid rgba(15, 118, 110, 0.7);
-  box-shadow: 0 0 0 6px rgba(13, 148, 136, 0.18);
+  background: rgba(13, 148, 136, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5), 0 0 12px rgba(13, 148, 136, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 .shot-dot--previous {
-  background: rgba(13, 148, 136, 0.65);
-  border: 2px solid rgba(13, 148, 136, 0.25);
+  background: rgba(13, 148, 136, 0.5);
+  border: 2px solid rgba(13, 148, 136, 0.3);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
 
 .shot-dot--preview {
@@ -867,14 +868,15 @@ button {
 }
 
 .shot-dot--miss {
-  background: #ef4444;
-  border: 2px solid rgba(239, 68, 68, 0.7);
-  box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.18);
+  background: rgba(239, 68, 68, 0.95);
+  border: 2px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.5), 0 0 12px rgba(239, 68, 68, 0.6), 0 2px 6px rgba(0, 0, 0, 0.4);
 }
 
 .shot-dot--miss.shot-dot--previous {
-  background: rgba(239, 68, 68, 0.65);
-  border: 2px solid rgba(239, 68, 68, 0.25);
+  background: rgba(239, 68, 68, 0.5);
+  border: 2px solid rgba(239, 68, 68, 0.3);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
 
 .shot-dot--miss.shot-dot--preview {

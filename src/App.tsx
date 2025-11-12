@@ -107,11 +107,28 @@ const App = () => {
     setActiveShot(null)
   }
 
+  // Reset round state when entering record view
   useEffect(() => {
     if (view === 'record') {
       resetRoundState()
     }
-  }, [view, endsPerRound])
+  }, [view])
+
+  // Adjust round length when endsPerRound changes, preserving existing data
+  useEffect(() => {
+    if (view === 'record') {
+      setCurrentRound(prev => {
+        const newRound = Array.from({ length: endsPerRound }, (_, index) => {
+          // Keep existing end data if it exists
+          return prev[index] ?? generateEndTemplate()
+        })
+        return newRound
+      })
+      
+      // Adjust currentEndIndex if it's now out of bounds
+      setCurrentEndIndex(prevIndex => Math.min(prevIndex, endsPerRound - 1))
+    }
+  }, [endsPerRound])
 
   const updateEndWithShot = (shot: Shot) => {
     setCurrentRound(prev => {
