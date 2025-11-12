@@ -433,7 +433,7 @@ const App = () => {
           <span>Undo Shot</span>
         </button>
 
-        <p className="record-instructions">Tap the target to place your shot.</p>
+        <p className="record-instructions">Tap the target to place your shot. Tap outside to record a miss. </p>
 
         <Target
           ringColors={ringColors}
