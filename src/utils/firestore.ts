@@ -32,7 +32,7 @@ export const saveRoundToFirestore = async (userId: string, round: Round): Promis
       createdAt: round.createdAt,
       totalScore: round.totalScore,
       round: roundData,
-      notes: round.notes,
+      ...(round.notes && { notes: round.notes }),
     }
 
     // Save the round with the round ID as the document ID
@@ -72,7 +72,7 @@ export const saveRoundsToFirestore = async (userId: string, rounds: Round[]): Pr
         createdAt: round.createdAt,
         totalScore: round.totalScore,
         round: roundData,
-        notes: round.notes,
+        ...(round.notes && { notes: round.notes }),
       }
     })
 
