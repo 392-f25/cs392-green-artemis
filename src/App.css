@@ -795,17 +795,39 @@ button {
   box-shadow: 0 0 0 2px rgba(129, 140, 248, 0.25);
 }
 
+.target-wrapper {
+  position: relative;
+  width: min(400px, 95vw);
+  height: min(400px, 95vw);
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: crosshair;
+}
+
 .target {
   position: relative;
-  width: min(280px, 80vw);
-  height: min(280px, 80vw);
+  width: 70%;
+  height: 70%;
   border-radius: 9999px;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   align-items: center;
   justify-content: center;
   background: radial-gradient(circle, rgba(255, 255, 255, 0.15), rgba(148, 163, 184, 0.05));
-  margin: 0 auto;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.1);
+  pointer-events: none;
+}
+
+.target::before {
+  content: '';
+  position: absolute;
+  inset: -40px;
+  border-radius: 9999px;
+  background: radial-gradient(circle at center, transparent 0%, transparent 50%, rgba(148, 163, 184, 0.05) 100%);
+  pointer-events: none;
+  z-index: -1;
 }
 
 .target-ring {
@@ -842,6 +864,23 @@ button {
   background: #34d399;
   border: 2px solid rgba(16, 185, 129, 0.6);
   box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.2);
+}
+
+.shot-dot--miss {
+  background: #ef4444;
+  border: 2px solid rgba(239, 68, 68, 0.7);
+  box-shadow: 0 0 0 6px rgba(239, 68, 68, 0.18);
+}
+
+.shot-dot--miss.shot-dot--previous {
+  background: rgba(239, 68, 68, 0.65);
+  border: 2px solid rgba(239, 68, 68, 0.25);
+}
+
+.shot-dot--miss.shot-dot--preview {
+  background: #f87171;
+  border: 2px solid rgba(248, 113, 113, 0.6);
+  box-shadow: 0 0 0 6px rgba(248, 113, 113, 0.2);
 }
 
 .end-summary {

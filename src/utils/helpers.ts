@@ -48,14 +48,33 @@ export const calculateAverage = (values: number[]): number => {
   return total / values.length
 }
 
+export const clampShotToTargetEdge = (shot: Shot): Shot => {
+  const distance = Math.sqrt(shot.x ** 2 + shot.y ** 2)
+  
+  // If shot is within target, return as-is
+  if (distance <= 1) {
+    return shot
+  }
+  
+  // Clamp to edge by normalizing to unit circle
+  return {
+    x: shot.x / distance,
+    y: shot.y / distance,
+    score: shot.score, // Keep original score (0 for miss)
+  }
+}
+
 export const calculateEndPrecision = (shots: Shot[], targetRadius = TARGET_RADIUS_UNITS): number => {
   if (shots.length <= 1) {
     return 0
   }
 
+  // Clamp shots to target edge for precision calculation
+  const clampedShots = shots.map(clampShotToTargetEdge)
+
   const distances: number[] = []
-  for (let i = 1; i < shots.length; i += 1) {
-    distances.push(calculateDistanceBetweenShots(shots[i - 1], shots[i], targetRadius))
+  for (let i = 1; i < clampedShots.length; i += 1) {
+    distances.push(calculateDistanceBetweenShots(clampedShots[i - 1], clampedShots[i], targetRadius))
   }
 
   return calculateAverage(distances)

@@ -19,8 +19,8 @@ export const Target = ({
   ringCount,
 }: TargetProps) => {
   return (
-    <div className="relative mx-auto">
-      <div className="target" onClick={onTargetClick} role="presentation">
+    <div className="target-wrapper" onClick={onTargetClick} role="presentation">
+      <div className="target">
         {ringColors.map((color, index) => (
           <div
             key={index}
@@ -33,20 +33,24 @@ export const Target = ({
           />
         ))}
         {currentRound.flatMap((end, endIndex) =>
-          end.shots.map((shot, shotIndex) => (
-            <div
-              key={`${endIndex}-${shotIndex}`}
-              className={`shot-dot ${endIndex === currentEndIndex ? 'shot-dot--current' : 'shot-dot--previous'}`}
-              style={{
-                left: `${(shot.x + 1) * 50}%`,
-                top: `${(shot.y + 1) * 50}%`,
-              }}
-            />
-          )),
+          end.shots.map((shot, shotIndex) => {
+            const distance = Math.sqrt(shot.x ** 2 + shot.y ** 2)
+            const isMiss = distance > 1
+            return (
+              <div
+                key={`${endIndex}-${shotIndex}`}
+                className={`shot-dot ${endIndex === currentEndIndex ? 'shot-dot--current' : 'shot-dot--previous'} ${isMiss ? 'shot-dot--miss' : ''}`}
+                style={{
+                  left: `${(shot.x + 1) * 50}%`,
+                  top: `${(shot.y + 1) * 50}%`,
+                }}
+              />
+            )
+          }),
         )}
         {activeShot && (
           <div
-            className="shot-dot shot-dot--preview"
+            className={`shot-dot shot-dot--preview ${Math.sqrt(activeShot.x ** 2 + activeShot.y ** 2) > 1 ? 'shot-dot--miss' : ''}`}
             style={{
               left: `${(activeShot.x + 1) * 50}%`,
               top: `${(activeShot.y + 1) * 50}%`,

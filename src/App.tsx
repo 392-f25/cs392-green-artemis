@@ -132,19 +132,25 @@ const App = () => {
     if (!currentEnd || currentEnd.shots.length >= SHOTS_PER_END) {
       return
     }
-    const target = event.currentTarget
-    const rect = target.getBoundingClientRect()
+    const wrapper = event.currentTarget
+    const rect = wrapper.getBoundingClientRect()
     const centerX = rect.left + rect.width / 2
     const centerY = rect.top + rect.height / 2
     const clickX = event.clientX - centerX
     const clickY = event.clientY - centerY
-    const radius = rect.width / 2
-    const normalizedX = clickX / radius
-    const normalizedY = clickY / radius
+    
+    // Use wrapper size for radius calculation
+    // Since target is 70% of wrapper, we need to adjust normalization
+    const wrapperRadius = rect.width / 2
+    const targetRadius = wrapperRadius * 0.7 // target is 70% of wrapper
+    
+    // Normalize to target size (values > 1 or < -1 are outside target)
+    const normalizedX = clickX / targetRadius
+    const normalizedY = clickY / targetRadius
     const distance = Math.sqrt(normalizedX ** 2 + normalizedY ** 2)
-    if (distance > 1) return
-
-    const score = calculateScore(normalizedX, normalizedY)
+    
+    // Allow shots outside the target, but they score 0
+    const score = distance > 1 ? 0 : calculateScore(normalizedX, normalizedY)
     const shot: Shot = {
       x: normalizedX,
       y: normalizedY,
