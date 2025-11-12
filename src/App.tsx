@@ -2,12 +2,17 @@ import type { MouseEvent, ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import type { View, Shot, End, Round } from './utils/types'
+import type { PracticeCardProps } from './components/home/PracticeCard'
 import { RING_COUNT, SHOTS_PER_END, DEFAULT_ENDS_PER_ROUND, MIN_ENDS, MAX_ENDS } from './utils/constants'
 import { generateEndTemplate, calculateScore, generateRingColors, calculateEndPrecision } from './utils/helpers'
-import { Target } from './components/Target'
-import { EndSummary } from './components/EndSummary'
-import { EndsPerRoundSelector } from './components/EndsPerRoundSelector'
 import { StatsView } from './components/StatsView'
+import { HomeHeader } from './components/home/HomeHeader'
+import { PracticeList } from './components/home/PracticeList'
+import { PracticePlaceholder } from './components/home/PracticePlaceholder'
+import { RecordPage } from './components/record/RecordPage'
+import { ProfilePage } from './components/profile/ProfilePage'
+import { SignInView } from './components/auth/SignInView'
+import { BottomNav } from './components/navigation/BottomNav'
 import { auth, googleProvider } from './firebase'
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
 import { saveRoundToFirestore, loadRoundsFromFirestore, deleteRoundFromFirestore } from './utils/firestore'
@@ -360,7 +365,6 @@ const App = () => {
       ),
     [rounds],
   )
-
   const practiceOrderMap = useMemo(() => {
     const chronological = [...rounds].sort(
       (first, second) => new Date(first.createdAt).getTime() - new Date(second.createdAt).getTime(),
@@ -368,131 +372,66 @@ const App = () => {
     return new Map(chronological.map((round, index) => [round.id, index + 1]))
   }, [rounds])
 
+  const practiceCards = useMemo<PracticeCardProps[]>(() => {
+    return orderedRounds.map((round, index) => {
+      const endCount = Math.max(round.ends.length, 1)
+      const bestEnd = round.ends.length > 0 ? Math.max(...round.ends.map(end => end.endScore)) : 0
+      const averagePerEnd = (round.totalScore / endCount).toFixed(1)
+      const practiceNumber = practiceOrderMap.get(round.id) ?? orderedRounds.length - index
+      const relativeLabel = formatDate(round.createdAt)
+      const practiceLabel = relativeLabel === 'Today' ? `Practice #${practiceNumber}` : relativeLabel
+
+      return {
+        id: round.id,
+        date: formatFullDate(round.createdAt),
+        details: `${practiceLabel} · ${formatTime(round.createdAt)} · ${round.ends.length} ends`,
+        totalScore: round.totalScore,
+        averagePerEnd,
+        bestEnd,
+        notes: round.notes,
+      }
+    })
+  }, [orderedRounds, practiceOrderMap])
+
   const homeView = (
     <div className="home-page">
-      <div className="home-page__header">
-        <h2 className="home-section-title">Your Recent Practices</h2>
-        <button type="button" className="home-record-button" onClick={() => setView('record')}>
-          Record Practice
-        </button>
-      </div>
+      <HomeHeader onRecordNewPractice={() => setView('record')} />
 
       {isLoadingRounds ? (
-        <div className="practice-placeholder">
-          <p className="practice-placeholder__title">Loading your sessions…</p>
-        </div>
-      ) : orderedRounds.length === 0 ? (
-        <div className="practice-placeholder">
-          <p className="practice-placeholder__title">No practice sessions yet</p>
-          <p className="practice-placeholder__subtitle">Tap "Record New Practice" to get started.</p>
-        </div>
+        <PracticePlaceholder title="Loading your sessions…" />
+      ) : practiceCards.length === 0 ? (
+        <PracticePlaceholder title="No practice sessions yet" subtitle={'Tap "Record New Practice" to get started.'} />
       ) : (
-        <div className="practice-list">
-          {orderedRounds.map((round, index) => {
-            const endCount = Math.max(round.ends.length, 1)
-            const bestEnd = round.ends.length > 0 ? Math.max(...round.ends.map(end => end.endScore)) : 0
-            const averagePerEnd = round.totalScore / endCount
-            const practiceNumber = practiceOrderMap.get(round.id) ?? orderedRounds.length - index
-            const relativeLabel = formatDate(round.createdAt)
-            const practiceLabel = relativeLabel === 'Today' ? `Practice #${practiceNumber}` : relativeLabel
-
-            return (
-              <article key={round.id} className="home-card">
-                <header className="home-card__header">
-                  <div className="home-card__meta">
-                    <span className="home-card__date">{formatFullDate(round.createdAt)}</span>
-                    <span className="home-card__details">{practiceLabel} · {formatTime(round.createdAt)} · {round.ends.length} ends</span>
-                  </div>
-                </header>
-                <div className="home-card__metrics">
-                  <div className="home-card__metric">
-                    <span className="home-card__metric-label">Total Score</span>
-                    <span className="home-card__metric-value">{round.totalScore}</span>
-                  </div>
-                  <div className="home-card__metric">
-                    <span className="home-card__metric-label">Avg / End</span>
-                    <span className="home-card__metric-value">{averagePerEnd.toFixed(1)}</span>
-                  </div>
-                  <div className="home-card__metric">
-                    <span className="home-card__metric-label">Best End</span>
-                    <span className="home-card__metric-value">{bestEnd}</span>
-                  </div>
-                </div>
-                {round.notes && (
-                  <div className="home-card__notes">
-                    <span className="home-card__notes-label">Notes:</span>
-                    <p className="home-card__notes-text">{round.notes}</p>
-                  </div>
-                )}
-              </article>
-            )
-          })}
-        </div>
+        <PracticeList cards={practiceCards} />
       )}
     </div>
   )
 
   const recordView = (
-    <div className="record-page">
-      <div className="record-panel">
-        <EndsPerRoundSelector
-          value={endsPerRoundInput}
-          minEnds={MIN_ENDS}
-          maxEnds={MAX_ENDS}
-          onChange={handleEndsPerRoundInputChange}
-          onBlur={handleEndsPerRoundInputBlur}
-        />
-
-        <button
-          className="undo-button"
-          onClick={handleUndoShot}
-          disabled={!canUndoShot}
-          aria-label="Undo last shot"
-        >
-          <UndoIcon />
-          <span>Undo Shot</span>
-        </button>
-
-        <p className="record-instructions">Tap the target to place your shot. Tap outside to record a miss. </p>
-
-        <Target
-          ringColors={ringColors}
-          currentRound={currentRound}
-          currentEndIndex={currentEndIndex}
-          activeShot={null}
-          onTargetClick={handleTargetClick}
-          ringCount={RING_COUNT}
-        />
-
-        <div className="record-summary">
-          <p className="record-summary__title">End {currentEndIndex + 1} of {endsPerRound}</p>
-          <p className="record-summary__text">Shots taken: {shotsInCurrentEnd.length} / {SHOTS_PER_END}</p>
-        </div>
-
-        <EndSummary currentRound={currentRound} currentEndIndex={currentEndIndex} onEndClick={setCurrentEndIndex} />
-
-        <div className="record-panel__actions">
-          <button className="primary-button" onClick={handlePrimaryActionClick} disabled={primaryActionDisabled}>
-            {primaryActionLabel}
-          </button>
-        </div>
-
-        <div className="record-notes">
-          <label htmlFor="practice-notes" className="record-notes__label">
-            Practice Notes (Optional)
-          </label>
-          <textarea
-            id="practice-notes"
-            className="record-notes__textarea"
-            placeholder="Add notes about this practice session..."
-            value={practiceNotes}
-            onChange={(e) => setPracticeNotes(e.target.value)}
-            rows={3}
-          />
-        </div>
-
-      </div>
-    </div>
+    <RecordPage
+      endsPerRoundInput={endsPerRoundInput}
+      minEnds={MIN_ENDS}
+      maxEnds={MAX_ENDS}
+      onEndsPerRoundInputChange={handleEndsPerRoundInputChange}
+      onEndsPerRoundInputBlur={handleEndsPerRoundInputBlur}
+      canUndoShot={canUndoShot}
+      onUndoShot={handleUndoShot}
+      undoIcon={UndoIcon}
+      ringColors={ringColors}
+      currentRound={currentRound}
+      currentEndIndex={currentEndIndex}
+      onTargetClick={handleTargetClick}
+      ringCount={RING_COUNT}
+      endsPerRound={endsPerRound}
+      shotsInCurrentEnd={shotsInCurrentEnd}
+      shotsPerEnd={SHOTS_PER_END}
+      onPrimaryActionClick={handlePrimaryActionClick}
+      primaryActionDisabled={primaryActionDisabled}
+      primaryActionLabel={primaryActionLabel}
+      practiceNotes={practiceNotes}
+      onPracticeNotesChange={setPracticeNotes}
+      onSelectEnd={setCurrentEndIndex}
+    />
   )
 
   const statsView = (
@@ -502,16 +441,12 @@ const App = () => {
   )
 
   const profileView = (
-    <div className="profile-page">
-      <div className="profile-card">
-        <div className="profile-card__avatar" aria-hidden="true">{userInitials}</div>
-        <h2 className="profile-card__name">{userDisplayName}</h2>
-        {user?.email ? <p className="profile-card__email">{user.email}</p> : null}
-      </div>
-      <button type="button" className="profile-signout-button" onClick={handleSignOut}>
-        Sign Out
-      </button>
-    </div>
+    <ProfilePage
+      initials={userInitials}
+      displayName={userDisplayName}
+      email={user?.email}
+      onSignOut={handleSignOut}
+    />
   )
 
   const renderActiveView = () => {
@@ -529,20 +464,7 @@ const App = () => {
     }
   }
 
-  const signInView = (
-    <div className="sign-in-shell">
-      <div className="sign-in-content">
-        <div>
-          <h1 className="sign-in-title">Artemis</h1>
-          <div className="sign-in-underline" aria-hidden="true" />
-        </div>
-        <p className="sign-in-subtitle"> Your Archery Progress Made Visible </p>
-        <button className="sign-in-button" onClick={handleSignIn}>
-          Sign in With Google
-        </button>
-      </div>
-    </div>
-  )
+  const signInView = <SignInView onSignIn={handleSignIn} />
 
   if (!user) {
     return signInView
@@ -564,23 +486,7 @@ const App = () => {
       <main className="app-main">
         {renderActiveView()}
       </main>
-      <nav className="bottom-nav" aria-label="Primary navigation">
-        {navItems.map(item => {
-          const isActive = view === item.key
-          return (
-            <button
-              key={item.key}
-              type="button"
-              className={`bottom-nav__item ${isActive ? 'bottom-nav__item--active' : ''}`}
-              onClick={() => setView(item.key)}
-              aria-current={isActive ? 'page' : undefined}
-            >
-              <span className="bottom-nav__icon">{item.icon}</span>
-              <span className="bottom-nav__label">{item.label}</span>
-            </button>
-          )
-        })}
-      </nav>
+      <BottomNav items={navItems} activeKey={view} onSelect={setView} />
     </div>
   )
 }
