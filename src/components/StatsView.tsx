@@ -131,8 +131,8 @@ const prepareChartData = (rounds: Round[]) => {
       practice: `#${rounds.length - index}`,
       practiceNumber: rounds.length - index,
       avgScore: Number(avgScore.toFixed(2)),
-      avgDistance: Number(avgDistance.toFixed(2)),
-      avgPrecision: Number(avgPrecision.toFixed(2)),
+      avgDistance: 10 - Number(avgDistance.toFixed(2)),
+      avgPrecision: 10 - Number(avgPrecision.toFixed(2)),
       totalScore: round.totalScore,
       date: formatDate(round.createdAt),
     }
@@ -287,6 +287,7 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
   const [localNotes, setLocalNotes] = useState<Record<string, string>>({})
   const [notesChanged, setNotesChanged] = useState<Record<string, boolean>>({})
   const [saveStatus, setSaveStatus] = useState<Record<string, SaveStatus>>({})
+  const [showMetricsInfo, setShowMetricsInfo] = useState(false)
 
   // Initialize local notes from rounds
   useEffect(() => {
@@ -516,7 +517,33 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
       ) : (
         <div className="stats-history">
           <div className="stats-chart">
-            <h3 className="stats-chart__title">Progress Over Time</h3>
+            <div className="stats-chart__header">
+              <h3 className="stats-chart__title">Progress Over Time</h3>
+              <button
+                className="stats-chart__info-button"
+                onClick={() => setShowMetricsInfo(!showMetricsInfo)}
+                type="button"
+                aria-label="Show metrics information"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="16" x2="12" y2="12" />
+                  <line x1="12" y1="8" x2="12.01" y2="8" />
+                </svg>
+              </button>
+            </div>
+            {showMetricsInfo && (
+              <div className="stats-chart__info">
+                <div className="stats-chart__info-item">
+                  <span className="stats-chart__info-label" style={{ color: '#10b981' }}>Accuracy:</span>
+                  <span className="stats-chart__info-text">How close your shots are to the center (higher is better)</span>
+                </div>
+                <div className="stats-chart__info-item">
+                  <span className="stats-chart__info-label" style={{ color: '#a78bfa' }}>Precision:</span>
+                  <span className="stats-chart__info-text">How consistent your shot grouping is (higher is better)</span>
+                </div>
+              </div>
+            )}
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
@@ -555,7 +582,7 @@ export const StatsView = ({ rounds, userId }: StatsViewProps) => {
                   dataKey="avgDistance"
                   stroke="#10b981"
                   strokeWidth={2}
-                  name="Avg Distance from Center"
+                  name="Accuracy"
                   dot={{ fill: '#10b981', r: 4 }}
                   activeDot={{ r: 6 }}
                 />
