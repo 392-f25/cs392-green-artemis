@@ -3,6 +3,7 @@ import type { End, Shot } from '../../utils/types'
 import { EndsPerRoundSelector } from '../EndsPerRoundSelector'
 import { Target } from '../Target'
 import { EndSummary } from '../EndSummary'
+import { UndoButton } from '../UndoButton'
 
 interface RecordPageProps {
   endsPerRoundInput: string
@@ -63,15 +64,7 @@ export const RecordPage: FC<RecordPageProps> = ({
         onBlur={onEndsPerRoundInputBlur}
       />
 
-      <button
-        className="undo-button"
-        onClick={onUndoShot}
-        disabled={!canUndoShot}
-        aria-label="Undo last shot"
-      >
-        <UndoIcon />
-        <span>Undo Shot</span>
-      </button>
+      <UndoButton canUndo={canUndoShot} onUndo={onUndoShot} icon={UndoIcon} />
 
       <p className="record-instructions">Tap the target to place your shot. Tap outside to record a miss. </p>
 
