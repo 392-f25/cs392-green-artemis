@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { AggregateStats, Round } from '../utils/types'
+import type { Round } from '../utils/types'
 import { calculateAverage, calculateDistanceFromCenter } from '../utils/helpers'
+import { computeAggregateStats } from '../utils/aggregateStats'
 import { updateRoundNotesInFirestore } from '../utils/firestore'
 import { StatsTabs, type StatsTab } from './stats/StatsTabs'
 import { AggregateControls } from './stats/AggregateControls'
@@ -91,23 +92,6 @@ const exportToCSV = (rounds: Round[]) => {
   link.click()
   document.body.removeChild(link)
   URL.revokeObjectURL(url)
-}
-
-const computeAggregateStats = (rounds: Round[]): AggregateStats => {
-  const shots = rounds.flatMap(round => round.ends.flatMap(end => end.shots))
-  const averagePoints = calculateAverage(shots.map(shot => shot.score))
-  const averageDistanceFromCenter = calculateAverage(shots.map(shot => calculateDistanceFromCenter(shot)))
-  const missedShots = shots.filter(shot => shot.score === 0).length
-  const endPrecisions = rounds.flatMap(round => round.ends.map(end => end.precision).filter(value => value > 0))
-  const averagePrecision = calculateAverage(endPrecisions)
-
-  return {
-    averagePoints,
-    averageDistanceFromCenter,
-    missedShots,
-    averagePrecision,
-    shotCount: shots.length,
-  }
 }
 
 type ChartDatum = {
