@@ -5,6 +5,7 @@ import type { View, Shot, End, Round } from './utils/types'
 import type { PracticeCardProps } from './components/home/PracticeCard'
 import { RING_COUNT, SHOTS_PER_END, DEFAULT_ENDS_PER_ROUND, MIN_ENDS, MAX_ENDS } from './utils/constants'
 import { generateEndTemplate, calculateScore, generateRingColors, calculateEndPrecision } from './utils/helpers'
+import { getSubmitButtonConfig } from './utils/submitButton'
 import { StatsView } from './components/StatsView'
 import { HomeHeader } from './components/home/HomeHeader'
 import { PracticeList } from './components/home/PracticeList'
@@ -229,16 +230,6 @@ const App = () => {
   const canUndoShot = shotsInCurrentEnd.length > 0
   const isRoundComplete = currentRound.length === endsPerRound && currentRound.every(end => end.shots.length === SHOTS_PER_END)
 
-  const primaryActionLabel = isRoundComplete ? 'Save Practice' : 'Next End'
-  const primaryActionDisabled = isRoundComplete ? false : !canConfirmEnd
-  const handlePrimaryActionClick = () => {
-    if (isRoundComplete) {
-      void handleSaveRound()
-      return
-    }
-    handleConfirmEnd()
-  }
-
   const handleSaveRound = async () => {
     if (!isRoundComplete || !user) return
     const normalizedEnds = currentRound.map(end => ({
@@ -268,6 +259,17 @@ const App = () => {
       alert('Failed to save your practice session. Please try again.')
     }
   }
+
+  const submitButtonConfig = getSubmitButtonConfig({
+    isRoundComplete,
+    canConfirmEnd,
+    handleSaveRound,
+    handleConfirmEnd,
+  })
+
+  const primaryActionLabel = submitButtonConfig.label
+  const primaryActionDisabled = submitButtonConfig.disabled
+  const handlePrimaryActionClick = submitButtonConfig.onClick
 
   const handleDeleteRound = async (roundId: string) => {
     if (!user) {
