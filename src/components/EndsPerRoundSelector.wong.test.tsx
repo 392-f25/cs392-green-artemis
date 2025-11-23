@@ -2,21 +2,33 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import App from '../App'
 
-// Mock Firebase auth
+// Mock Firestore utilities
+vi.mock('../utils/firestore', () => ({
+  loadRoundsFromFirestore: vi.fn(async () => []),
+  saveRoundToFirestore: vi.fn(async () => {}),
+  saveRoundsToFirestore: vi.fn(async () => {}),
+  updateRoundNotesInFirestore: vi.fn(async () => {}),
+  deleteRoundFromFirestore: vi.fn(async () => {}),
+}))
+
+// Mock Firebase
 vi.mock('../firebase', () => ({
   auth: {},
   googleProvider: {},
+  db: {},
+  app: {},
 }))
 
 vi.mock('firebase/auth', () => ({
   onAuthStateChanged: vi.fn((_auth, callback) => {
+    // Call callback synchronously with test user
     callback({
       uid: 'test-user-id',
       email: 'test@example.com',
       displayName: 'Test User',
       photoURL: null,
     })
-    return vi.fn()
+    return vi.fn() // Return unsubscribe function
   }),
   signInWithPopup: vi.fn(),
   signOut: vi.fn(),
