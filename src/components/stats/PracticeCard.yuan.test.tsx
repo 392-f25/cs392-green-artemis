@@ -13,22 +13,46 @@ interface PracticeCardProps {
     isDeletePending: boolean
 }
 
-test('Total Practice Score is summed correctly', async () => {
-    const pcp: PracticeCardProps = {
-        round: {
-            id: "",
-            createdAt: "",
-            ends: [],
-            totalScore: 73,
-            notes: ""
-        },
-        practiceNumber: 1,
-        formattedDate: "",
-        onRequestDelete: (_: string) => { },
-        onSaveNotes: async (_roundId: string, _notes: string) => { },
-        isDeleting: false,
-        isDeletePending: false
-    }
+const pcp: PracticeCardProps = {
+    round: {
+        id: "",
+        createdAt: "",
+        ends: [
+            {
+                shots: [
+                    {
+                        x: 0,
+                        y: 0,
+                        score: 10
+                    }
+                ],
+                endScore: 10,
+                precision: 10
+            },
+            {
+                shots: [
+                    {
+                        x: 0,
+                        y: 0,
+                        score: 2
+                    }
+                ],
+                endScore: 2,
+                precision: 0.2
+            }
+        ],
+        totalScore: 73,
+        notes: ""
+    },
+    practiceNumber: 1,
+    formattedDate: "",
+    onRequestDelete: (_: string) => { },
+    onSaveNotes: async (_roundId: string, _notes: string) => { },
+    isDeleting: false,
+    isDeletePending: false
+}
+
+test('Total Practice Score is summed correctly', () => {
 
     const { getByText } = render(
         <PracticeCard
