@@ -17,6 +17,7 @@ import { BottomNav } from './components/navigation/BottomNav'
 import { auth, googleProvider } from './firebase'
 import { onAuthStateChanged, signInWithPopup, signOut, type User } from 'firebase/auth'
 import { saveRoundToFirestore, loadRoundsFromFirestore, deleteRoundFromFirestore } from './utils/firestore'
+import { useRoundManagement } from './hooks/useRoundManagement'
 
 const HomeIcon = () => (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -127,21 +128,13 @@ const App = () => {
     }
   }, [view])
 
-  // Adjust round length when endsPerRound changes, preserving existing data
-  useEffect(() => {
-    if (view === 'record') {
-      setCurrentRound(prev => {
-        const newRound = Array.from({ length: endsPerRound }, (_, index) => {
-          // Keep existing end data if it exists
-          return prev[index] ?? generateEndTemplate()
-        })
-        return newRound
-      })
-
-      // Adjust currentEndIndex if it's now out of bounds
-      setCurrentEndIndex(prevIndex => Math.min(prevIndex, endsPerRound - 1))
-    }
-  }, [endsPerRound])
+  // Use custom hook to manage round adjustments when endsPerRound changes
+  useRoundManagement({
+    view,
+    endsPerRound,
+    setCurrentRound,
+    setCurrentEndIndex,
+  })
 
   const updateEndWithShot = (shot: Shot) => {
     setCurrentRound(prev => {
